@@ -9,7 +9,7 @@ import {
 import { MdOutlineBrightness4, MdOutlineBedtime } from 'react-icons/md';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../hooks/useAuth';
-import { doc, updateDoc, serverTimestamp, collection, addDoc } from 'firebase/firestore';
+import { serverTimestamp, collection, addDoc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 
 const translations = {
@@ -118,7 +118,7 @@ const translations = {
 const ElderlyHealthSurvey = () => {
   const navigate = useNavigate();
   const { language, toggleLanguage } = useLanguage();
-  const { profile } = useAuth();
+  const { profile, updateProfile } = useAuth();
   
   const [answers, setAnswers] = useState({});
   const [otherText, setOtherText] = useState({});
@@ -176,8 +176,8 @@ const ElderlyHealthSurvey = () => {
           aiParagraphEnglish = 'MODERATE RISK: Your profile suggests chronic conditions like Blood Pressure or breathing difficulties. Please schedule a review with your doctor within the next 48 hours for a baseline checkup.';
         }
 
-        // Save to Firebase
-        await updateDoc(doc(db, 'users', profile.uid), {
+        // Save to Firebase + refresh auth context profile to avoid stale redirect guards
+        await updateProfile({
           elderlyHealthProfile: {
             answers: profileAnswers,
             createdAt: new Date().toISOString(),

@@ -7,8 +7,6 @@ import {
 } from 'react-icons/fa';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../hooks/useAuth';
-import { doc, updateDoc } from 'firebase/firestore';
-import { db } from '../../config/firebase';
 
 const translations = {
   en: {
@@ -128,7 +126,7 @@ const translations = {
 const WellnessHealthSurvey = () => {
   const navigate = useNavigate();
   const { language, toggleLanguage } = useLanguage();
-  const { user } = useAuth();
+  const { updateProfile } = useAuth();
   
   const [answers, setAnswers] = useState({});
   const [otherText, setOtherText] = useState({});
@@ -153,13 +151,11 @@ const WellnessHealthSurvey = () => {
     });
 
     try {
-      if (user?.uid) {
-        await updateDoc(doc(db, 'users', user.uid), {
-          wellnessProfile: profile,
-          patientType: 'wellness',
-          isSurveyCompleted: true
-        });
-      }
+      await updateProfile({
+        wellnessProfile: profile,
+        patientType: 'wellness',
+        isSurveyCompleted: true
+      });
       setTimeout(() => navigate('/dashboard/wellness'), 1500);
     } catch (err) {
       console.error(err);

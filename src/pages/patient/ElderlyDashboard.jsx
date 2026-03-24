@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  FaHeartbeat, FaLungs, FaWalking, FaFilePdf,
-  FaDownload, FaPhone, FaThermometerHalf, FaEye,
-  FaBatteryThreeQuarters, FaChevronRight, FaClock,
-  FaBroadcastTower, FaUserNurse, FaExclamationCircle, FaShieldAlt, FaChartLine, FaRobot, FaBell, FaExclamationTriangle
+  FaHeartbeat, FaLungs, FaFilePdf, FaDownload, FaThermometerHalf, FaEye,
+  FaExclamationCircle, FaShieldAlt, FaChartLine, FaExclamationTriangle, FaTint
 } from 'react-icons/fa';
 import { MdOutlineDarkMode, MdOutlineLightMode } from 'react-icons/md';
 import { LineChart, Line, ResponsiveContainer, Tooltip, XAxis, CartesianGrid } from 'recharts';
@@ -24,12 +22,34 @@ const generateMockVitals = (count = 7) => {
     data.push({
       heartRate: Math.floor(Math.random() * (85 - 65 + 1)) + 65,
       spO2: Math.floor(Math.random() * (99 - 95 + 1)) + 95,
-      temperature: (Math.random() * (37.1 - 36.4) + 36.4).toFixed(1),
-      stepCount: Math.floor(Math.random() * (4000 - 800 + 1)) + 800,
+      bodyTemperature: Number((Math.random() * (37.2 - 36.4) + 36.4).toFixed(1)),
+      roomTemperature: Number((Math.random() * (30 - 23) + 23).toFixed(1)),
+      roomHumidity: Math.floor(Math.random() * (68 - 40 + 1)) + 40,
       timestamp: { seconds: Math.floor((now - i * 24 * 60 * 60 * 1000) / 1000) }
     });
   }
   return data;
+};
+
+const toNumber = (value, fallback) => {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+};
+
+const normalizeVitalsEntry = (entry = {}) => {
+  const bodyTemperature = toNumber(
+    entry.bodyTemperature ?? entry.temperature ?? entry.temperatureAvg,
+    36.6
+  );
+
+  return {
+    ...entry,
+    heartRate: toNumber(entry.heartRate ?? entry.heartRateAvg, 72),
+    spO2: toNumber(entry.spO2 ?? entry.spo2 ?? entry.spo2Avg, 98),
+    bodyTemperature,
+    roomTemperature: toNumber(entry.roomTemperature ?? entry.roomTemp ?? entry.ambientTemperature, 25.0),
+    roomHumidity: toNumber(entry.roomHumidity ?? entry.humidity ?? entry.relativeHumidity, 52)
+  };
 };
 
 const ElderlyDashboard = () => {
@@ -49,18 +69,20 @@ const ElderlyDashboard = () => {
 
   const { vitals: firestoreVitals, latestVitals: firestoreLatest } = useVitals(profile?.uid);
   
-  const displayVitals = firestoreVitals && firestoreVitals.length > 0 ? firestoreVitals : generateMockVitals(7);
-  const latest = firestoreLatest || displayVitals[0];
+  const rawVitals = firestoreVitals && firestoreVitals.length > 0 ? firestoreVitals : generateMockVitals(7);
+  const displayVitals = rawVitals.map(normalizeVitalsEntry);
+  const latest = normalizeVitalsEntry(firestoreLatest || rawVitals[0] || {});
 
   const aiStatus = profile?.aiAssessment?.aiStatus || 'STABLE';
   const aiText = profile?.aiAssessment?.aiParagraphEnglish || (profile?.elderlyHealthProfile 
     ? "Based on your clinical profile, your hypertension is well-managed. Continue Metformin as prescribed."
     : "Vital signs are stable. Complete your weekly survey for deeper AI analysis.");
 
-  const currentHr = latest?.heartRate || 72;
-  const currentSpo2 = latest?.spO2 || 98;
-  const currentTemp = latest?.temperature || 36.6;
-  const currentSteps = latest?.stepCount || 1040;
+  const currentHr = latest.heartRate;
+  const currentSpo2 = latest.spO2;
+  const currentBodyTemp = latest.bodyTemperature;
+  const currentRoomTemp = latest.roomTemperature;
+  const currentRoomHumidity = latest.roomHumidity;
 
   useEffect(() => {
     if (!profile?.uid) return;
@@ -99,6 +121,11 @@ const ElderlyDashboard = () => {
       subtitle: 'Personalized monitoring and care',
       vitals: 'My Health Indicators',
       analytics: 'Vital Trends (7 Days)',
+      hr: 'HEART RATE',
+      spo2: 'OXYGEN (SPO2)',
+      roomTemp: 'ROOM TEMP',
+      roomHumidity: 'ROOM HUMIDITY',
+      bodyTemp: 'BODY TEMP',
       ai: 'AI Health Insights',
       alerts: 'Recent Safety Alerts',
       emptyAlerts: 'No active alerts',
@@ -109,6 +136,11 @@ const ElderlyDashboard = () => {
       subtitle: 'వ్యక్తిగతీకరించిన పర్యవేక్షణ మరియు సంరక్షణ',
       vitals: 'నా ఆరోగ్య సూచికలు',
       analytics: '7 రోజుల ట్రెండ్స్',
+      hr: 'హృదయ స్పందన',
+      spo2: 'ఆక్సిజన్ (SPO2)',
+      roomTemp: 'గది ఉష్ణోగ్రత',
+      roomHumidity: 'గది ఆర్ద్రత',
+      bodyTemp: 'శరీర ఉష్ణోగ్రత',
       ai: 'AI ఆరోగ్య అంతర్దృష్టులు',
       alerts: 'భద్రతా హెచ్చరికలు',
       emptyAlerts: 'ఎటువంటి అలర్ట్స్ లేవు',
@@ -123,9 +155,20 @@ const ElderlyDashboard = () => {
     return {
       day: ts.toLocaleDateString('en-US', { weekday: 'short' }),
       hr: v.heartRate,
-      spo2: v.spO2
+      spo2: v.spO2,
+      roomTemp: v.roomTemperature,
+      humidity: v.roomHumidity,
+      bodyTemp: v.bodyTemperature
     };
   });
+
+  const vitalCards = [
+    { icon: FaHeartbeat, label: text.hr, value: currentHr.toFixed(0), unit: 'bpm', color: 'var(--danger)', bg: 'var(--danger-light)' },
+    { icon: FaLungs, label: text.spo2, value: currentSpo2.toFixed(0), unit: '%', color: 'var(--info)', bg: 'var(--info-light)' },
+    { icon: FaThermometerHalf, label: text.roomTemp, value: currentRoomTemp.toFixed(1), unit: '°C', color: '#F59E0B', bg: '#FEF3C7' },
+    { icon: FaTint, label: text.roomHumidity, value: currentRoomHumidity.toFixed(0), unit: '%', color: '#0D9488', bg: '#CCFBF1' },
+    { icon: FaThermometerHalf, label: text.bodyTemp, value: currentBodyTemp.toFixed(1), unit: '°C', color: '#7C3AED', bg: '#EDE9FE' }
+  ];
 
   return (
     <PatientLayout patientType="elderly">
@@ -174,16 +217,17 @@ const ElderlyDashboard = () => {
       <div className="responsive-px" style={{ paddingTop: '24px' }}>
         <div style={{ fontSize: '18px', fontWeight: 700, marginBottom: '14px', color: 'var(--text-primary)' }}>{text.vitals}</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
-          <div style={{ background: 'var(--surface)', padding: '20px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)', textAlign: 'center' }}>
-            <FaHeartbeat color="var(--danger)" size={24} style={{ marginBottom: '8px' }} />
-            <div style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontWeight: 700 }}>HEART RATE</div>
-            <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--danger)' }}>{currentHr} <span style={{ fontSize: '12px' }}>bpm</span></div>
-          </div>
-          <div style={{ background: 'var(--surface)', padding: '20px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)', textAlign: 'center' }}>
-            <FaLungs color="var(--info)" size={24} style={{ marginBottom: '8px' }} />
-            <div style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontWeight: 700 }}>OXYGEN (SPO2)</div>
-            <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--info)' }}>{currentSpo2}%</div>
-          </div>
+          {vitalCards.map((card) => (
+            <div key={card.label} style={{ background: 'var(--surface)', padding: '20px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)', textAlign: 'center' }}>
+              <div style={{ width: '42px', height: '42px', margin: '0 auto 8px auto', borderRadius: '50%', background: card.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <card.icon color={card.color} size={20} />
+              </div>
+              <div style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontWeight: 700 }}>{card.label}</div>
+              <div style={{ fontSize: '20px', fontWeight: 800, color: card.color }}>
+                {card.value}<span style={{ fontSize: '12px' }}> {card.unit}</span>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -201,8 +245,11 @@ const ElderlyDashboard = () => {
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
               <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: 'var(--text-secondary)'}} />
               <Tooltip contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px' }} />
-              <Line type="monotone" dataKey="hr" stroke="var(--danger)" strokeWidth={3} dot={{r: 4, fill: 'var(--danger)'}} />
-              <Line type="monotone" dataKey="spo2" stroke="var(--info)" strokeWidth={3} dot={{r: 4, fill: 'var(--info)'}} />
+              <Line type="monotone" dataKey="hr" stroke="var(--danger)" strokeWidth={2.5} dot={{r: 3, fill: 'var(--danger)'}} />
+              <Line type="monotone" dataKey="spo2" stroke="var(--info)" strokeWidth={2.5} dot={{r: 3, fill: 'var(--info)'}} />
+              <Line type="monotone" dataKey="roomTemp" stroke="#F59E0B" strokeWidth={2.5} dot={{r: 3, fill: '#F59E0B'}} />
+              <Line type="monotone" dataKey="humidity" stroke="#0D9488" strokeWidth={2.5} dot={{r: 3, fill: '#0D9488'}} />
+              <Line type="monotone" dataKey="bodyTemp" stroke="#7C3AED" strokeWidth={2.5} dot={{r: 3, fill: '#7C3AED'}} />
             </LineChart>
           </ResponsiveContainer>
         </div>
