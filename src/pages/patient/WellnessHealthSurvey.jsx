@@ -7,8 +7,6 @@ import {
 } from 'react-icons/fa';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../hooks/useAuth';
-import { doc, updateDoc } from 'firebase/firestore';
-import { db } from '../../config/firebase';
 
 const translations = {
   en: {
@@ -128,13 +126,11 @@ const translations = {
 const WellnessHealthSurvey = () => {
   const navigate = useNavigate();
   const { language, toggleLanguage } = useLanguage();
-  const { user } = useAuth();
+  const { profile, updateProfile } = useAuth();
   const { isGuest = false } = useLocation().state || {};
   
   const [answers, setAnswers] = useState({});
   const [otherText, setOtherText] = useState({});
-  const [recording, setRecording] = useState(null);
-  const recognitionRef = useRef(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const t = translations[language] || translations.en;
@@ -147,16 +143,16 @@ const WellnessHealthSurvey = () => {
     if (!isComplete || isSubmitting) return;
     setIsSubmitting(true);
     
-    const profile = {};
+    const surveyData = {};
     t.questions.forEach((q, idx) => {
       const key = `q${idx}`;
-      profile[q.text] = answers[key] === 'other' ? otherText[key] : q.options[answers[key]];
+      surveyData[q.text] = answers[key] === 'other' ? otherText[key] : q.options[answers[key]];
     });
 
     try {
-      if (user?.uid) {
-        await updateDoc(doc(db, 'users', user.uid), {
-          medicalHistory: profile,
+      if (profile?.uid) {
+        await updateProfile({
+          wellnessProfile: surveyData,
           patientType: 'wellness',
           isSurveyCompleted: true
         });
@@ -165,10 +161,10 @@ const WellnessHealthSurvey = () => {
       if (isGuest) {
         navigate('/shared/ai-report', { 
           state: { 
-            answers: profile, 
+            answers: surveyData, 
             questions: t.questions,
             isGuest: true,
-            aiStatus: 'STABLE', // Default for wellness guests
+            aiStatus: 'STABLE',
             patient: { name: 'Guest User' }
           } 
         });
@@ -190,7 +186,7 @@ const WellnessHealthSurvey = () => {
         .opt-btn[data-selected="true"] { background: var(--accent-light); border-color: var(--accent); border-width: 2px; }
         .opt-indicator { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--border); display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
         .opt-btn[data-selected="true"] .opt-indicator { background: var(--accent); border-color: var(--accent); }
-        .other-textarea { width: 100%; min-height: 80px; background: var(--surface); border: 1.5px solid var(--accent); border-radius: var(--radius-md); padding: 12px 52px 12px 16px; font-family: inherit; font-size: 15px; color: var(--text-primary); resize: vertical; box-sizing: border-box; outline: none; margin-top: 10px; }
+        .other-textarea { width: 100%; min-height: 80px; background: var(--surface); border: 1.5px solid var(--accent); border-radius: var(--radius-md); padding: 12px 16px; font-family: inherit; font-size: 15px; color: var(--text-primary); resize: vertical; box-sizing: border-box; outline: none; margin-top: 10px; }
         .generate-btn { 
           position: fixed; 
           bottom: calc(24px + env(safe-area-inset-bottom)); 
@@ -236,8 +232,8 @@ const WellnessHealthSurvey = () => {
           <div style={{ fontSize: '18px', fontWeight: 700 }}>{t.title}</div>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
-          <button onClick={() => toggleLanguage('en')} style={{ padding: '6px 16px', borderRadius: '100px', fontSize: '13px', fontWeight: 600, border: '1.5px solid var(--border)', background: language === 'en' ? 'var(--accent)' : 'transparent', color: language === 'en' ? 'white' : 'var(--text-secondary)' }}>EN</button>
-          <button onClick={() => toggleLanguage('te')} style={{ padding: '6px 16px', borderRadius: '100px', fontSize: '13px', fontWeight: 600, border: '1.5px solid var(--border)', background: language === 'te' ? 'var(--accent)' : 'transparent', color: language === 'te' ? 'white' : 'var(--text-secondary)' }}>TE</button>
+          <button onClick={() => toggleLanguage('en')} style={{ padding: '6px 16px', borderRadius: '100px', fontSize: '13px', fontWeight: 600, border: '1.5px solid var(--border)', background: language === 'en' ? 'var(--accent)' : 'transparent', color: language === 'en' ? 'white' : 'var(--text-secondary)', cursor: 'pointer' }}>EN</button>
+          <button onClick={() => toggleLanguage('te')} style={{ padding: '6px 16px', borderRadius: '100px', fontSize: '13px', fontWeight: 600, border: '1.5px solid var(--border)', background: language === 'te' ? 'var(--accent)' : 'transparent', color: language === 'te' ? 'white' : 'var(--text-secondary)', cursor: 'pointer' }}>TE</button>
         </div>
       </header>
 
@@ -247,39 +243,36 @@ const WellnessHealthSurvey = () => {
       </div>
 
       <div style={{ height: '4px', background: 'var(--border)' }}>
-        <div style={{ height: '100%', background: 'var(--accent)', width: `${progressPercent}%`, transition: 'width 0.3s' }} />
+        <div style={{ height: '100%', background: 'var(--accent)', width: `${progressPercent}%`, transition: 'width 0.3s ease' }} />
       </div>
 
       <div style={{ padding: '20px 0 120px 0', maxWidth: '720px', margin: '0 auto' }}>
         {t.questions.map((q, idx) => {
           const qKey = `q${idx}`;
           return (
-            <div key={idx} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-xl)', padding: '20px', margin: '0 16px 16px 16px' }}>
+            <div key={idx} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-xl)', padding: '24px', margin: '0 16px 16px 16px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '20px' }}>
-                <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <q.icon size={18} color={q.color} />
+                <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <q.icon size={22} color={q.color} />
                 </div>
                 <div>
-                  <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase' }}>Question {idx + 1}</div>
-                  <div style={{ fontSize: '16px', fontWeight: 600, lineHeight: 1.3 }}>{q.text}</div>
+                  <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: '2px' }}>Question {idx + 1}</div>
+                  <div style={{ fontSize: '17px', fontWeight: 600, lineHeight: 1.4 }}>{q.text}</div>
                 </div>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {q.options.map((opt, oIdx) => (
-                  <button key={oIdx} className="opt-btn" onClick={() => setAnswers(prev => ({...prev, [qKey]: oIdx}))} data-selected={answers[qKey] === oIdx} style={{ padding: '12px 16px' }}>
-                    <div className="opt-indicator">{answers[qKey] === oIdx && <FaCheck size={10} color="white" />}</div>
-                    <span style={{ fontSize: '14px' }}>{opt}</span>
+                  <button key={oIdx} className="opt-btn" onClick={() => setAnswers(prev => ({...prev, [qKey]: oIdx}))} data-selected={answers[qKey] === oIdx}>
+                    <div className="opt-indicator">{answers[qKey] === oIdx && <FaCheck size={12} color="white" />}</div>
+                    <span style={{ fontSize: '15px' }}>{opt}</span>
                   </button>
                 ))}
-                {/* Simplified: Wellness survey might also need 'Other' for conditions/goals */}
-                <button className="opt-btn" onClick={() => setAnswers(prev => ({...prev, [qKey]: 'other'}))} data-selected={answers[qKey] === 'other'} style={{ padding: '12px 16px' }}>
-                  <div className="opt-indicator">{answers[qKey] === 'other' && <FaCheck size={10} color="white" />}</div>
-                  <span style={{ fontSize: '14px' }}>Other (Type below)</span>
+                <button className="opt-btn" onClick={() => setAnswers(prev => ({...prev, [qKey]: 'other'}))} data-selected={answers[qKey] === 'other'}>
+                  <div className="opt-indicator">{answers[qKey] === 'other' && <FaCheck size={12} color="white" />}</div>
+                  <span style={{ fontSize: '15px' }}>Other (Type below)</span>
                 </button>
                 {answers[qKey] === 'other' && (
-                  <div style={{ position: 'relative' }}>
-                    <textarea className="other-textarea" placeholder="Describe here..." value={otherText[qKey] || ''} onChange={(e) => setOtherText(prev => ({...prev, [qKey]: e.target.value}))} />
-                  </div>
+                  <textarea className="other-textarea" placeholder="Describe here..." value={otherText[qKey] || ''} onChange={(e) => setOtherText(prev => ({...prev, [qKey]: e.target.value}))} />
                 )}
               </div>
             </div>
@@ -288,7 +281,7 @@ const WellnessHealthSurvey = () => {
       </div>
 
       <button className={`generate-btn ${isComplete ? 'active' : ''}`} onClick={handleSubmit}>
-        <FaMagic /> {isSubmitting ? 'Saving Profile...' : t.generateBtn}
+        {isSubmitting ? 'Saving Profile...' : <><FaMagic /> {t.generateBtn}</>}
       </button>
     </div>
   );

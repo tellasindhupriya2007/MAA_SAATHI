@@ -10,15 +10,9 @@ import { FontSizeProvider } from './context/FontSizeContext'
 
 import { AuthProvider } from './context/AuthContext'
 import { AppProvider } from './context/AppContext'
+import { registerSW } from 'virtual:pwa-register'
 
-// Register Service Worker for PWA
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js')
-      .then(reg => console.log('SW Registered', reg))
-      .catch(err => console.log('SW Error', err))
-  })
-}
+registerSW({ immediate: true })
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

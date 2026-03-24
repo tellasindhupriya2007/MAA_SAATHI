@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  FaHeartbeat, FaWalking, FaFilePdf, FaDownload, FaEye,
-  FaBatteryThreeQuarters, FaBroadcastTower, FaRunning, FaBed, 
-  FaAppleAlt, FaBrain, FaChartLine, FaRobot, FaCalendarCheck
+  FaHeartbeat, FaLungs, FaFilePdf, FaDownload, FaEye,
+  FaBatteryThreeQuarters, FaBroadcastTower, FaChartLine, FaCalendarCheck, FaThermometerHalf, FaTint
 } from 'react-icons/fa';
 import { MdOutlineDarkMode, MdOutlineLightMode } from 'react-icons/md';
 import { LineChart, Line, ResponsiveContainer, Tooltip, XAxis, CartesianGrid } from 'recharts';
@@ -14,19 +13,41 @@ import { useTheme } from '../../context/ThemeContext';
 import { useVitals } from '../../hooks/useVitals';
 import { generateProfessionalReport } from '../../utils/generatePdfReport';
 
-const STEP_GOAL = 10000;
-
-const generateMockWellnessTrends = (count = 7) => {
+const generateMockVitals = (count = 7) => {
   const data = [];
-  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const now = Date.now();
   for (let i = 0; i < count; i++) {
     data.push({
-      day: days[i],
-      steps: Math.floor(Math.random() * (11000 - 3000 + 1)) + 3000,
-      sleep: (Math.random() * (9 - 5) + 5).toFixed(1)
+      heartRate: Math.floor(Math.random() * (90 - 62 + 1)) + 62,
+      spO2: Math.floor(Math.random() * (99 - 95 + 1)) + 95,
+      bodyTemperature: Number((Math.random() * (37.1 - 36.3) + 36.3).toFixed(1)),
+      roomTemperature: Number((Math.random() * (31 - 23) + 23).toFixed(1)),
+      roomHumidity: Math.floor(Math.random() * (70 - 40 + 1)) + 40,
+      timestamp: { seconds: Math.floor((now - i * 24 * 60 * 60 * 1000) / 1000) }
     });
   }
   return data;
+};
+
+const toNumber = (value, fallback) => {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+};
+
+const normalizeVitalsEntry = (entry = {}) => {
+  const bodyTemperature = toNumber(
+    entry.bodyTemperature ?? entry.temperature ?? entry.temperatureAvg,
+    36.6
+  );
+
+  return {
+    ...entry,
+    heartRate: toNumber(entry.heartRate ?? entry.heartRateAvg, 72),
+    spO2: toNumber(entry.spO2 ?? entry.spo2 ?? entry.spo2Avg, 98),
+    bodyTemperature,
+    roomTemperature: toNumber(entry.roomTemperature ?? entry.roomTemp ?? entry.ambientTemperature, 25.2),
+    roomHumidity: toNumber(entry.roomHumidity ?? entry.humidity ?? entry.relativeHumidity, 52)
+  };
 };
 
 const WellnessDashboard = () => {
@@ -44,9 +65,15 @@ const WellnessDashboard = () => {
 
   const name = (profile?.name || 'User').split(' ')[0];
   const { vitals: firestoreVitals, latestVitals: firestoreLatest } = useVitals(profile?.uid);
-  
-  const currentSteps = firestoreLatest?.stepCount || 6420;
-  const mockTrends = generateMockWellnessTrends(7);
+
+  const rawVitals = firestoreVitals && firestoreVitals.length > 0 ? firestoreVitals : generateMockVitals(7);
+  const displayVitals = rawVitals.map(normalizeVitalsEntry);
+  const latest = normalizeVitalsEntry(firestoreLatest || rawVitals[0] || {});
+  const currentHr = latest.heartRate;
+  const currentSpo2 = latest.spO2;
+  const currentBodyTemp = latest.bodyTemperature;
+  const currentRoomTemp = latest.roomTemperature;
+  const currentRoomHumidity = latest.roomHumidity;
 
   const generatePDF = async (type = 'instant', mode = 'download') => {
     setIsGenerating(true);
@@ -62,22 +89,42 @@ const WellnessDashboard = () => {
   const t = {
     en: {
       subtitle: 'Achieve your health goals',
-      vitals: 'My Wellness Stats', ring: 'Ring Connected',
-      steps: 'STEPS', goal: 'Daily Goal', activity: 'Activity',
-      sleep: 'Sleep Quality', stress: 'Stress Level', diet: 'Diet',
-      analytics: 'Weekly Step Trends', insights: 'Daily Wellness Tip',
+      vitals: 'My Health Indicators', ring: 'Ring Connected',
+      hr: 'HEART RATE', spo2: 'OXYGEN (SPO2)',
+      roomTemp: 'ROOM TEMP', roomHumidity: 'ROOM HUMIDITY', bodyTemp: 'BODY TEMP',
+      analytics: 'Vital Trends (7 Days)',
       view: 'View PDF', download: 'Download Summary', share: 'Share with Health Coach'
     },
     te: {
       subtitle: 'మీ ఆరోగ్య లక్ష్యాలను చేరుకోండి',
-      vitals: 'నా వెల్నెస్ గణాంకాలు', ring: 'రింగ్ కనెక్ట్ చేయబడింది',
-      steps: 'అడుగులు', goal: 'రోజువారీ లక్ష్యం', activity: 'కార్యాచరణ',
-      sleep: 'నిద్ర నాణ్యత', stress: 'ఒత్తిడి స్థాయి', diet: 'ఆహారం',
-      analytics: 'వారపు అడుగుల ట్రెండ్స్', insights: 'రోజువారీ వెల్నెస్ చిట్కా',
+      vitals: 'నా ఆరోగ్య సూచికలు', ring: 'రింగ్ కనెక్ట్ చేయబడింది',
+      hr: 'హృదయ స్పందన', spo2: 'ఆక్సిజన్ (SPO2)',
+      roomTemp: 'గది ఉష్ణోగ్రత', roomHumidity: 'గది ఆర్ద్రత', bodyTemp: 'శరీర ఉష్ణోగ్రత',
+      analytics: '7 రోజుల వైటల్ ట్రెండ్స్',
       view: 'మొత్తం చూడండి', download: 'సారాంశం డౌన్‌లోడ్', share: 'హెల్త్ కోచ్‌తో షేర్ చేయండి'
     }
   };
   const text = t[language] || t.en;
+
+  const chartData = [...displayVitals].slice(0, 7).reverse().map(v => {
+    const ts = v.timestamp?.seconds ? new Date(v.timestamp.seconds * 1000) : new Date(v.timestamp);
+    return {
+      day: ts.toLocaleDateString('en-US', { weekday: 'short' }),
+      hr: v.heartRate,
+      spo2: v.spO2,
+      roomTemp: v.roomTemperature,
+      humidity: v.roomHumidity,
+      bodyTemp: v.bodyTemperature
+    };
+  });
+
+  const vitalCards = [
+    { icon: FaHeartbeat, label: text.hr, value: currentHr.toFixed(0), unit: 'bpm', color: 'var(--danger)', bg: 'var(--danger-light)' },
+    { icon: FaLungs, label: text.spo2, value: currentSpo2.toFixed(0), unit: '%', color: 'var(--info)', bg: 'var(--info-light)' },
+    { icon: FaThermometerHalf, label: text.roomTemp, value: currentRoomTemp.toFixed(1), unit: '°C', color: '#F59E0B', bg: '#FEF3C7' },
+    { icon: FaTint, label: text.roomHumidity, value: currentRoomHumidity.toFixed(0), unit: '%', color: '#0D9488', bg: '#CCFBF1' },
+    { icon: FaThermometerHalf, label: text.bodyTemp, value: currentBodyTemp.toFixed(1), unit: '°C', color: '#7C3AED', bg: '#EDE9FE' }
+  ];
 
   return (
     <PatientLayout patientType="wellness">
@@ -109,38 +156,20 @@ const WellnessDashboard = () => {
       </div>
 
       <div className="responsive-px" style={{ paddingTop: '16px' }}>
-          <div className="responsive-p" style={{ background: 'var(--surface)', padding: '24px', borderRadius: 'var(--radius-xl)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-md)' }}>
-             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '16px' }}>
-                <div>
-                  <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{text.steps}</div>
-                  <div style={{ fontSize: '32px', fontWeight: 800, color: 'var(--text-primary)' }}>{currentSteps.toLocaleString()}</div>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-tertiary)' }}>{text.goal}</div>
-                  <div style={{ fontSize: '16px', fontWeight: 700, color: 'var(--accent)' }}>{STEP_GOAL.toLocaleString()}</div>
-                </div>
-             </div>
-             <div style={{ height: '14px', background: 'var(--bg-secondary)', borderRadius: '100px', overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${Math.min((currentSteps/STEP_GOAL)*100, 100)}%`, background: 'var(--accent)', borderRadius: '100px', transition: 'width 1s ease-out' }} />
-             </div>
-          </div>
-      </div>
-
-      <div className="responsive-px" style={{ paddingTop: '24px', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
-          {[
-            { icon: FaBed, color: 'var(--info)', label: text.sleep, val: '7.2 hrs' },
-            { icon: FaBrain, color: 'var(--warning)', label: text.stress, val: 'Optimal' },
-            { icon: FaRunning, color: 'var(--accent)', label: text.activity, val: 'High' },
-            { icon: FaAppleAlt, color: 'var(--success)', label: text.diet, val: 'Balanced' }
-          ].map((item, i) => (
-            <div key={i} style={{ background: 'var(--surface)', padding: '18px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <item.icon color={item.color} size={18} />
-                  <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>{item.label}</span>
-               </div>
-               <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)' }}>{item.val}</div>
+        <div style={{ fontSize: '18px', fontWeight: 700, marginBottom: '14px', color: 'var(--text-primary)' }}>{text.vitals}</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+          {vitalCards.map((card) => (
+            <div key={card.label} style={{ background: 'var(--surface)', padding: '18px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)', textAlign: 'center' }}>
+              <div style={{ width: '42px', height: '42px', margin: '0 auto 8px auto', borderRadius: '50%', background: card.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <card.icon color={card.color} size={20} />
+              </div>
+              <div style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontWeight: 700 }}>{card.label}</div>
+              <div style={{ fontSize: '20px', fontWeight: 800, color: card.color }}>
+                {card.value}<span style={{ fontSize: '12px' }}> {card.unit}</span>
+              </div>
             </div>
           ))}
+        </div>
       </div>
 
       <div className="responsive-mx responsive-p" style={{ marginTop: '24px', padding: '20px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-xl)' }}>
@@ -148,13 +177,17 @@ const WellnessDashboard = () => {
             <FaChartLine color="var(--accent)" />
             <span style={{ fontSize: '16px', fontWeight: 700 }}>{text.analytics}</span>
          </div>
-         <div style={{ height: '180px', width: '100%' }}>
+         <div style={{ height: '220px', width: '100%' }}>
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={mockTrends}>
+              <LineChart data={chartData}>
                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
                  <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: 'var(--text-secondary)'}} />
                  <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid var(--border)' }} />
-                 <Line type="monotone" dataKey="steps" stroke="var(--accent)" strokeWidth={3} dot={{r: 4, fill: 'var(--accent)'}} />
+                 <Line type="monotone" dataKey="hr" stroke="var(--danger)" strokeWidth={2.5} dot={{r: 3, fill: 'var(--danger)'}} />
+                 <Line type="monotone" dataKey="spo2" stroke="var(--info)" strokeWidth={2.5} dot={{r: 3, fill: 'var(--info)'}} />
+                 <Line type="monotone" dataKey="roomTemp" stroke="#F59E0B" strokeWidth={2.5} dot={{r: 3, fill: '#F59E0B'}} />
+                 <Line type="monotone" dataKey="humidity" stroke="#0D9488" strokeWidth={2.5} dot={{r: 3, fill: '#0D9488'}} />
+                 <Line type="monotone" dataKey="bodyTemp" stroke="#7C3AED" strokeWidth={2.5} dot={{r: 3, fill: '#7C3AED'}} />
               </LineChart>
             </ResponsiveContainer>
          </div>

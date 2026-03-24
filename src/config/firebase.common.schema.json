@@ -1,0 +1,213 @@
+{
+  "version": "1.0.0",
+  "collections": {
+    "users": {
+      "path": "users/{uid}",
+      "required": [
+        "uid",
+        "role"
+      ],
+      "fields": {
+        "uid": "string",
+        "name": "string",
+        "email": "string",
+        "photoURL": "string",
+        "role": "string",
+        "createdAt": "timestamp",
+        "updatedAt": "timestamp"
+      },
+      "enums": {
+        "role": [
+          "asha",
+          "doctor",
+          "mother",
+          "patient",
+          "caretaker",
+          "admin"
+        ]
+      },
+      "allowAdditionalFields": true
+    },
+    "patients": {
+      "path": "patients/{patientId}",
+      "required": [
+        "id"
+      ],
+      "fields": {
+        "id": "string",
+        "name": "string",
+        "phone": "string",
+        "age": "integer",
+        "ashaWorkerId": "string",
+        "doctorId": "string",
+        "village": "string",
+        "riskScore": "number",
+        "riskLevel": "string",
+        "createdAt": "timestamp",
+        "lastVisitDate": "timestamp"
+      },
+      "enums": {
+        "riskLevel": [
+          "LOW",
+          "MODERATE",
+          "CRITICAL"
+        ]
+      },
+      "allowAdditionalFields": true
+    },
+    "surveys": {
+      "path": "surveys/{surveyId}",
+      "required": [
+        "id",
+        "patientId"
+      ],
+      "fields": {
+        "id": "string",
+        "patientId": "string",
+        "ashaWorkerId": "string",
+        "answers": "object",
+        "riskScore": "number",
+        "aiStatus": "string",
+        "sentToDoctor": "boolean",
+        "createdAt": "timestamp"
+      },
+      "allowAdditionalFields": true
+    },
+    "alerts": {
+      "path": "alerts/{alertId}",
+      "required": [
+        "patientId",
+        "type",
+        "status"
+      ],
+      "fields": {
+        "id": "string",
+        "patientId": "string",
+        "ashaWorkerId": "string",
+        "doctorId": "string",
+        "type": "string",
+        "severity": "string",
+        "status": "string",
+        "location": "latlng",
+        "doctorNumber": "string",
+        "familyNumbers": "string[]",
+        "customMessage": "string",
+        "createdAt": "timestamp",
+        "timestamp": "timestamp",
+        "resolvedAt": "timestamp"
+      },
+      "enums": {
+        "status": [
+          "active",
+          "resolved"
+        ],
+        "severity": [
+          "LOW",
+          "MEDIUM",
+          "HIGH"
+        ],
+        "type": [
+          "sos",
+          "FALL",
+          "LOW_SPO2",
+          "HIGH_HEART_RATE",
+          "MANUAL_SOS",
+          "aiCritical",
+          "vitals",
+          "abnormal"
+        ]
+      },
+      "allowAdditionalFields": true
+    },
+    "vitals": {
+      "path": "vitals/{vitalId}",
+      "required": [
+        "patientId",
+        "source",
+        "timestamp"
+      ],
+      "fields": {
+        "patientId": "string",
+        "source": "string",
+        "timestamp": "timestamp",
+        "heartRateAvg": "number",
+        "spo2Avg": "number",
+        "steps": "integer",
+        "sleepHours": "number",
+        "temperatureAvg": "number",
+        "date": "date"
+      },
+      "enums": {
+        "source": [
+          "manual",
+          "iot"
+        ]
+      },
+      "allowAdditionalFields": true
+    },
+    "patientDailyVitals": {
+      "path": "patients/{patientId}/dailyVitals/{date}",
+      "required": [
+        "patientId",
+        "heartRateAvg",
+        "spo2Avg",
+        "steps",
+        "sleepHours",
+        "temperatureAvg",
+        "date",
+        "timestamp"
+      ],
+      "fields": {
+        "patientId": "string",
+        "heartRateAvg": "number",
+        "spo2Avg": "number",
+        "steps": "integer",
+        "sleepHours": "number",
+        "temperatureAvg": "number",
+        "date": "date",
+        "timestamp": "timestamp"
+      },
+      "allowAdditionalFields": true
+    },
+    "patientAlerts": {
+      "path": "patients/{patientId}/alerts/{alertId}",
+      "required": [
+        "patientId",
+        "type",
+        "severity",
+        "status",
+        "location",
+        "timestamp"
+      ],
+      "fields": {
+        "patientId": "string",
+        "type": "string",
+        "severity": "string",
+        "status": "string",
+        "location": "latlng",
+        "doctorNumber": "string",
+        "familyNumbers": "string[]",
+        "customMessage": "string",
+        "timestamp": "timestamp"
+      },
+      "enums": {
+        "status": [
+          "active",
+          "resolved"
+        ],
+        "severity": [
+          "LOW",
+          "MEDIUM",
+          "HIGH"
+        ],
+        "type": [
+          "FALL",
+          "LOW_SPO2",
+          "HIGH_HEART_RATE",
+          "MANUAL_SOS"
+        ]
+      },
+      "allowAdditionalFields": true
+    }
+  }
+}

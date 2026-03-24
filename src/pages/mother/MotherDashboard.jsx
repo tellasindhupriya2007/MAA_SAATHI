@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  FaHeartbeat, FaLungs, FaWalking, FaFilePdf,
+  FaHeartbeat, FaLungs, FaFilePdf,
   FaDownload, FaPhone, FaThermometerHalf, FaEye,
   FaBatteryThreeQuarters, FaChevronRight, FaClock,
-  FaBroadcastTower, FaUserNurse, FaClipboardList
+  FaBroadcastTower, FaUserNurse, FaClipboardList, FaTint
 } from 'react-icons/fa';
 
 import { MdOutlineDarkMode, MdOutlineLightMode } from 'react-icons/md';
-import { LineChart, Line, ResponsiveContainer, Tooltip } from 'recharts';
+import { LineChart, Line, ResponsiveContainer, Tooltip, XAxis, CartesianGrid } from 'recharts';
 import MotherLayout from '../../layouts/MotherLayout';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../hooks/useAuth';
@@ -17,24 +17,49 @@ import { useVitals } from '../../hooks/useVitals';
 import { useSurveys } from '../../hooks/useSurveys';
 import { generateInstantReport, generateMonthlyReport } from '../../utils/generatePdfReport';
 
-/* ── Mock data ── */
-const MOCK_LINE_DATA = [
-  { day: 'Mon', hr: 72 }, { day: 'Tue', hr: 74 }, { day: 'Wed', hr: 78 },
-  { day: 'Thu', hr: 75 }, { day: 'Fri', hr: 71 }, { day: 'Sat', hr: 76 },
-  { day: 'Sun', hr: 78 },
-];
-const MOCK_TEMP = [
-  { date: 'Today',     val: '98.6°F', today: true  },
-  { date: 'Yesterday', val: '98.5°F', today: false },
-  { date: 'Mon',       val: '99.1°F', today: false },
-];
 const REPORTS = [
   { id: 'r1', type: 'Antenatal Checkup', date: '12 Mar 2026', urgency: 'STABLE'   },
   { id: 'r2', type: 'Antenatal Checkup', date: '01 Feb 2026', urgency: 'MODERATE' },
 ];
 
 const RING_CONNECTED = true;
-const STEP_GOAL    = 5000;
+
+const generateMockVitals = (count = 7) => {
+  const data = [];
+  const now = Date.now();
+  for (let i = 0; i < count; i++) {
+    data.push({
+      heartRate: Math.floor(Math.random() * (88 - 64 + 1)) + 64,
+      spO2: Math.floor(Math.random() * (99 - 95 + 1)) + 95,
+      bodyTemperature: Number((Math.random() * (37.1 - 36.4) + 36.4).toFixed(1)),
+      roomTemperature: Number((Math.random() * (30 - 23) + 23).toFixed(1)),
+      roomHumidity: Math.floor(Math.random() * (68 - 40 + 1)) + 40,
+      timestamp: { seconds: Math.floor((now - i * 24 * 60 * 60 * 1000) / 1000) }
+    });
+  }
+  return data;
+};
+
+const toNumber = (value, fallback) => {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+};
+
+const normalizeVitalsEntry = (entry = {}) => {
+  const bodyTemperature = toNumber(
+    entry.bodyTemperature ?? entry.temperature ?? entry.temperatureAvg,
+    36.6
+  );
+
+  return {
+    ...entry,
+    heartRate: toNumber(entry.heartRate ?? entry.heartRateAvg, 72),
+    spO2: toNumber(entry.spO2 ?? entry.spo2 ?? entry.spo2Avg, 98),
+    bodyTemperature,
+    roomTemperature: toNumber(entry.roomTemperature ?? entry.roomTemp ?? entry.ambientTemperature, 25.0),
+    roomHumidity: toNumber(entry.roomHumidity ?? entry.humidity ?? entry.relativeHumidity, 52)
+  };
+};
 
 const urgencyColors = {
   STABLE:   { bg: 'var(--success-light)', color: 'var(--success)', icon: 'var(--success)' },
@@ -56,6 +81,7 @@ const MotherDashboard = () => {
       navigate('/mother/medical-history');
     }
   }, [profile, navigate]);
+
   const [isGenerating, setIsGenerating] = useState(false);
   const [reportGenerated, setReportGenerated] = useState(false);
   const [isSending, setIsSending] = useState(false);
@@ -69,9 +95,15 @@ const MotherDashboard = () => {
     setTimeout(() => setToast(''), 3000);
   };
 
-  const currentHr = latestVitals?.heartRate || 72;
-  const currentSpo2 = latestVitals?.spO2 || 98;
-  const currentSteps = latestVitals?.stepCount || 1240;
+  const rawVitals = vitals && vitals.length > 0 ? vitals : generateMockVitals(7);
+  const displayVitals = rawVitals.map(normalizeVitalsEntry);
+  const latest = normalizeVitalsEntry(latestVitals || rawVitals[0] || {});
+
+  const currentHr = latest.heartRate;
+  const currentSpo2 = latest.spO2;
+  const currentBodyTemp = latest.bodyTemperature;
+  const currentRoomTemp = latest.roomTemperature;
+  const currentRoomHumidity = latest.roomHumidity;
 
   const generatePDF = async (type, mode = 'download') => {
     setIsGenerating(true);
@@ -102,7 +134,6 @@ const MotherDashboard = () => {
       if (email) {
         setIsSending(true);
         showToast("Doctor linked and report sent successfully!");
-        // Keep the button visible but maybe in a disabled/sent state
         setTimeout(() => setIsSending(false), 3000);
       }
     }
@@ -116,7 +147,9 @@ const MotherDashboard = () => {
     en: {
       subtitle: 'Your health, monitored daily',
       vitals: 'My Vitals Today', updated: 'Last updated 10 mins ago',
-      hr: 'HEART RATE', spo2: 'BLOOD OXYGEN', steps: 'STEPS TODAY',
+      hr: 'HEART RATE', spo2: 'BLOOD OXYGEN',
+      roomTemp: 'ROOM TEMP', roomHumidity: 'ROOM HUMIDITY', bodyTemp: 'BODY TEMP',
+      analytics: 'Vital Trends (7 Days)',
       stable: '● STABLE', low: '● LOW', goal: 'of 5,000 goal',
       tempTitle: 'Temperature', tempSub: 'Last 3 readings',
       historyTitle: 'Vitals History', last7: 'Last 7 days',
@@ -130,7 +163,9 @@ const MotherDashboard = () => {
     te: {
       subtitle: 'మీ ఆరోగ్యం, ప్రతిరోజూ పర్యవేక్షించబడుతుంది',
       vitals: 'ఈ రోజు నా ప్రాణాధారాలు', updated: '10 నిమిషాల క్రితం నవీకరించబడింది',
-      hr: 'హృదయ స్పందన', spo2: 'రక్తంలో ఆక్సిజన్', steps: 'ఈరోజు అడుగులు',
+      hr: 'హృదయ స్పందన', spo2: 'రక్తంలో ఆక్సిజన్',
+      roomTemp: 'గది ఉష్ణోగ్రత', roomHumidity: 'గది ఆర్ద్రత', bodyTemp: 'శరీర ఉష్ణోగ్రత',
+      analytics: '7 రోజుల వైటల్ ట్రెండ్స్',
       stable: '● స్థిరంగా', low: '● తక్కువ', goal: '5,000 లక్ష్యంలో',
       tempTitle: 'ఉష్ణోగ్రత', tempSub: 'చివరి 3 రీడింగులు',
       historyTitle: 'ప్రాణాధారాల చరిత్ర', last7: 'గత 7 రోజులు',
@@ -148,6 +183,26 @@ const MotherDashboard = () => {
     background: 'var(--surface)', border: '1px solid var(--border)',
     borderRadius: 'var(--radius-lg)',
   };
+
+  const chartData = [...displayVitals].slice(0, 7).reverse().map((v) => {
+    const ts = v.timestamp?.seconds ? new Date(v.timestamp.seconds * 1000) : new Date(v.timestamp);
+    return {
+      day: ts.toLocaleDateString('en-US', { weekday: 'short' }),
+      hr: v.heartRate,
+      spo2: v.spO2,
+      roomTemp: v.roomTemperature,
+      humidity: v.roomHumidity,
+      bodyTemp: v.bodyTemperature
+    };
+  });
+
+  const vitalCards = [
+    { icon: FaHeartbeat, label: text.hr, value: currentHr.toFixed(0), unit: 'bpm', color: 'var(--danger)', bg: 'var(--danger-light)' },
+    { icon: FaLungs, label: text.spo2, value: currentSpo2.toFixed(0), unit: '%', color: 'var(--info)', bg: 'var(--info-light)' },
+    { icon: FaThermometerHalf, label: text.roomTemp, value: currentRoomTemp.toFixed(1), unit: '°C', color: '#F59E0B', bg: '#FEF3C7' },
+    { icon: FaTint, label: text.roomHumidity, value: currentRoomHumidity.toFixed(0), unit: '%', color: '#0D9488', bg: '#CCFBF1' },
+    { icon: FaThermometerHalf, label: text.bodyTemp, value: currentBodyTemp.toFixed(1), unit: '°C', color: '#7C3AED', bg: '#EDE9FE' }
+  ];
 
   return (
     <MotherLayout>
@@ -185,10 +240,11 @@ const MotherDashboard = () => {
         ...card, borderLeft: 'none', borderRight: 'none', borderTop: 'none',
         borderRadius: 0, paddingTop: '16px', paddingBottom: '16px',
         position: 'sticky', top: 0, zIndex: 50,
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        paddingTop: 'calc(16px + env(safe-area-inset-top))'
+        display: 'flex', alignItems: 'center', justifySelf: 'space-between',
+        paddingTop: 'calc(16px + env(safe-area-inset-top))',
+        width: '100%', boxSizing: 'border-box'
       }}>
-        <div>
+        <div style={{ flex: 1 }}>
           <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.2 }}> Namaste, {name} 👋 </div>
           <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}> {text.subtitle} </div>
         </div>
@@ -251,29 +307,39 @@ const MotherDashboard = () => {
           <span style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>{text.updated}</span>
         </div>
         <div className="vitals-grid">
-          <div className="responsive-p" style={{ ...card, padding: '16px 12px', textAlign: 'center' }}>
-            <div style={{ width: '44px', height: '44px', borderRadius: '50%', margin: '0 auto 10px auto', background: 'var(--danger-light)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><FaHeartbeat size={22} color="var(--danger)" /></div>
-            <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-tertiary)', marginBottom: '6px' }}>{text.hr}</div>
-            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: '3px' }}>
-              <span style={{ fontSize: '24px', fontWeight: 800, color: 'var(--danger)' }}>{currentHr}</span>
-              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>bpm</span>
+          {vitalCards.map((item) => (
+            <div key={item.label} className="responsive-p" style={{ ...card, padding: '16px 12px', textAlign: 'center' }}>
+              <div style={{ width: '44px', height: '44px', borderRadius: '50%', margin: '0 auto 10px auto', background: item.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <item.icon size={22} color={item.color} />
+              </div>
+              <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-tertiary)', marginBottom: '6px' }}>{item.label}</div>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: '3px' }}>
+                <span style={{ fontSize: '24px', fontWeight: 800, color: item.color }}>{item.value}</span>
+                <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{item.unit}</span>
+              </div>
             </div>
-          </div>
-          <div style={{ ...card, padding: '16px 12px', textAlign: 'center' }}>
-            <div style={{ width: '44px', height: '44px', borderRadius: '50%', margin: '0 auto 10px auto', background: 'var(--info-light)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><FaLungs size={22} color="var(--info)" /></div>
-            <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-tertiary)', marginBottom: '6px' }}>{text.spo2}</div>
-            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: '3px' }}>
-              <span style={{ fontSize: '24px', fontWeight: 800, color: 'var(--info)' }}>{currentSpo2}</span>
-              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>%</span>
-            </div>
-          </div>
-          <div style={{ ...card, padding: '16px 12px', textAlign: 'center' }}>
-            <div style={{ width: '44px', height: '44px', borderRadius: '50%', margin: '0 auto 10px auto', background: 'var(--success-light)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><FaWalking size={22} color="var(--success)" /></div>
-            <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-tertiary)', marginBottom: '6px' }}>{text.steps}</div>
-            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: '3px' }}>
-              <span style={{ fontSize: '24px', fontWeight: 800, color: 'var(--success)' }}>{currentSteps.toLocaleString()}</span>
-            </div>
-          </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="responsive-mx responsive-p" style={{ marginTop: '16px', ...card }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+          <FaHeartbeat size={16} color="var(--accent)" />
+          <span style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)' }}>{text.analytics}</span>
+        </div>
+        <div style={{ height: '220px', width: '100%' }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+              <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--text-secondary)' }} />
+              <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid var(--border)' }} />
+              <Line type="monotone" dataKey="hr" stroke="var(--danger)" strokeWidth={2.5} dot={{ r: 3, fill: 'var(--danger)' }} />
+              <Line type="monotone" dataKey="spo2" stroke="var(--info)" strokeWidth={2.5} dot={{ r: 3, fill: 'var(--info)' }} />
+              <Line type="monotone" dataKey="roomTemp" stroke="#F59E0B" strokeWidth={2.5} dot={{ r: 3, fill: '#F59E0B' }} />
+              <Line type="monotone" dataKey="humidity" stroke="#0D9488" strokeWidth={2.5} dot={{ r: 3, fill: '#0D9488' }} />
+              <Line type="monotone" dataKey="bodyTemp" stroke="#7C3AED" strokeWidth={2.5} dot={{ r: 3, fill: '#7C3AED' }} />
+            </LineChart>
+          </ResponsiveContainer>
         </div>
       </div>
 
@@ -343,14 +409,11 @@ const MotherDashboard = () => {
       </div>
 
       <div className="responsive-px" style={{ paddingTop: '16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <FaClipboardList size={18} color="var(--accent)" />
-            <span style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)' }}>{language === 'te' ? 'గత రిపోర్ట్లు' : 'Report History'}</span>
-          </div>
-          <button onClick={() => navigate('/mother/reports')} style={{ fontSize: '14px', fontWeight: 600, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer' }}>{text.viewAll}</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+          <FaClipboardList size={18} color="var(--accent)" />
+          <span style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)' }}>{language === 'te' ? 'గత రిపోర్ట్లు' : 'Report History'}</span>
         </div>
-
+        
         {REPORTS.map(rep => {
           const uc = urgencyColors[rep.urgency] || urgencyColors.STABLE;
           return (

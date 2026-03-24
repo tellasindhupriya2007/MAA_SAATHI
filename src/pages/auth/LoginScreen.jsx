@@ -6,6 +6,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../hooks/useAuth';
 import { motion, AnimatePresence } from 'framer-motion';
+import { getRouteFromProfile } from '../../utils/authRedirect';
 
 const ROLE_IMAGES = {
   asha: '/login_asha_v11.png',
@@ -46,27 +47,35 @@ const LoginScreen = () => {
   const handleGoogleLogin = async () => {
     try {
       const result = await loginWithGoogle();
-      if (result.isNewUser) {
-        // Redirect to role setup if first time login
-        navigate('/role-setup', { 
-          state: { 
-            preSelectedRole: role,
-            preSelectedType: initialType 
-          } 
-        });
-      } else if (result.profile) {
-        // Direct to dashboard if profile exists
-        const userRole = result.profile.role;
-        const pType = result.profile.patientType;
-        
-        let target = `/${userRole}/dashboard`;
-        if (userRole === 'patient') {
-          target = pType === 'wellness' ? '/dashboard/wellness' : '/dashboard/elderly';
-        } else if (userRole === 'caretaker') {
-          target = '/family-dashboard';
-        }
-        navigate(target, { replace: true });
+
+      if (result?.firestoreUnavailable) {
+        alert(result.firestoreMessage || (language === 'en'
+          ? 'Google sign-in succeeded but profile storage is unavailable.'
+          : 'Google లాగిన్ విజయవంతమైంది కానీ ప్రొఫైల్ స్టోరేజ్ అందుబాటులో లేదు.'));
+        return;
       }
+
+      // If new user or no profile exists, push towards onboarding
+      if (result?.isNewUser || !result?.profile) {
+        // If they chose patient but no sub-type, ask for it
+        if (role === 'patient' && !initialType) {
+          navigate('/patient-type-select', { replace: true });
+          return;
+        }
+
+        navigate('/role-setup', {
+          replace: true,
+          state: {
+            preSelectedRole: role,
+            preSelectedType: role === 'patient' ? initialType : ''
+          }
+        });
+        return;
+      }
+
+      // Existing user: Route based on their saved profile
+      navigate(getRouteFromProfile(result.profile), { replace: true });
+
     } catch (err) {
       console.error(err);
       alert(language === 'en' ? 'Auth failed' : 'లాగిన్ విఫలమైంది');
