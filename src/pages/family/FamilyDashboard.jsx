@@ -175,7 +175,7 @@ const FamilyDashboard = () => {
       </aside>
 
       {/* --- DASHBOARD --- */}
-      <main className="main-scroll-area responsive-px">
+      <main className="main-scroll-area">
         <div className="content-width" id="dashboard-top" style={{ paddingBottom: '96px', paddingTop: 'env(safe-area-inset-top)' }}>
           <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '32px' }}>
              <div>

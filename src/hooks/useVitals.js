@@ -25,7 +25,8 @@ export function useVitals(patientId) {
       setLatestVitals(docs[0] || null);
       setLoading(false);
     }, (error) => {
-      console.error("Vitals collection error:", error);
+      console.warn("Vitals Fetch Failed (Database may be missing / default mode issue):", error.message);
+      setVitals([]);
       setLoading(false);
     });
 

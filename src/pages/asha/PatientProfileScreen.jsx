@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useContext, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { 
   FaArrowLeft, FaEdit, FaMapMarkerAlt, FaUser, FaShieldAlt, 
   FaExclamationCircle, FaHistory, FaChevronDown, FaChevronUp, 
@@ -7,6 +7,7 @@ import {
   FaClipboardList, FaExchangeAlt, FaBaby, FaBabyCarriage
 } from 'react-icons/fa';
 import { FaLungs } from 'react-icons/fa6';
+import { AppContext } from '../../context/AppContext';
 
 const MOCK_PATIENT = {
   id: 'p1',
@@ -57,12 +58,23 @@ const MOCK_PATIENT = {
 };
 
 const PatientProfileScreen = () => {
+  const { id } = useParams();
   const navigate = useNavigate();
+  const { patients, updatePatient } = useContext(AppContext);
+  
+  // Find real patient from context, fallback to Mock for dev if not found
+  const foundPatient = patients.find(p => p.id === id) || MOCK_PATIENT;
+  
   const [expandedVisitId, setExpandedVisitId] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [patientData, setPatientData] = useState(MOCK_PATIENT);
+  const [patientData, setPatientData] = useState(foundPatient);
   const [showConfirm, setShowConfirm] = useState(false);
   const [toast, setToast] = useState('');
+
+  // Sync state if id changes or patients list updates
+  useEffect(() => {
+    if (foundPatient) setPatientData(foundPatient);
+  }, [id, patients]);
 
   const toggleVisit = (vid) => {
     setExpandedVisitId(prev => prev === vid ? null : vid);
@@ -85,6 +97,7 @@ const PatientProfileScreen = () => {
   };
 
   const handleSave = () => {
+    updatePatient(patientData);
     showToast('Profile updated');
     setIsEditing(false);
   };

@@ -30,7 +30,7 @@ const PatientLayout = ({ children, role = 'mother', patientType = '' }) => {
     }}>
       {children}
 
-      <div style={{
+      <div className="mobile-only" style={{
         position: 'fixed', 
         bottom: 'calc(16px + env(safe-area-inset-bottom))',
         left: '16px', 

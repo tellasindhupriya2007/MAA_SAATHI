@@ -45,6 +45,7 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (authUser) => {
+      console.log("[AUTH] State Changed:", authUser?.email);
       if (authUser) {
         setUser(authUser);
         try {
@@ -52,16 +53,20 @@ export const AuthProvider = ({ children }) => {
           const profileSnap = await getDoc(profileRef);
 
           if (profileSnap.exists()) {
+            console.log("[AUTH] Profile Loaded:", profileSnap.data().role);
             setProfile(profileSnap.data());
           } else {
+            // New User: Don't create dummy if we are expecting setup flow
+            console.log("[AUTH] No existing profile. Waiting for role orientation.");
             setProfile(null);
           }
         } catch (error) {
-          // Firestore may be temporarily unavailable/misconfigured in dev; avoid noisy hard errors.
-          if (!isFirestoreAccessError(error)) {
-            console.error('Error fetching user profile:', error);
+          console.error("[AUTH] Firestore Access Error:", error);
+          // If Firestore API is truly disabled/missing, then use mock for Dev speed
+          if (isFirestoreAccessError(error)) {
+             const mock = { uid: authUser.uid, name: authUser.displayName || 'Dev User', role: 'mother', isSurveyCompleted: true };
+             setProfile(mock);
           }
-          setProfile(null);
         }
       } else {
         setUser(null);

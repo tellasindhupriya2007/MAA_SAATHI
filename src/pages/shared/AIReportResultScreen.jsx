@@ -16,7 +16,7 @@ export default function AIReportResultScreen() {
   const [reportSent, setReportSent] = useState(false);
   const [toast, setToast] = useState('');
 
-  const { questions = [], answers = {} } = location.state || {};
+  const { questions = [], answers = {}, isGuest = false } = location.state || {};
   const patient = location.state?.patient || { name: 'Suhana Khatun', age: 24, village: 'Ramgarh', house: '42' };
 
   useEffect(() => {
@@ -466,12 +466,25 @@ export default function AIReportResultScreen() {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <button onClick={handleSendToDoctor} style={{ height: '52px', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', font: '15px "DM Sans", sans-serif', fontWeight: 600, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer' }}>
-               <FaPaperPlane size={16} /> Send to Doctor
-            </button>
-            <button onClick={generatePDF} style={{ height: '52px', background: 'transparent', color: 'var(--accent)', border: '1.5px solid var(--accent)', borderRadius: 'var(--radius-md)', font: '15px "DM Sans", sans-serif', fontWeight: 600, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer' }}>
-               <FaDownload size={16} /> Download PDF
-            </button>
+            {isGuest ? (
+              <>
+                <button onClick={() => navigate('/login')} style={{ height: '52px', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', font: '15px "DM Sans", sans-serif', fontWeight: 600, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer' }}>
+                   <FaUserMd size={16} /> Create Account to Save
+                </button>
+                <button onClick={generatePDF} style={{ height: '52px', background: 'transparent', color: 'var(--accent)', border: '1.5px solid var(--accent)', borderRadius: 'var(--radius-md)', font: '15px "DM Sans", sans-serif', fontWeight: 600, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer' }}>
+                   <FaDownload size={16} /> Download Copy
+                </button>
+              </>
+            ) : (
+              <>
+                <button onClick={handleSendToDoctor} style={{ height: '52px', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', font: '15px "DM Sans", sans-serif', fontWeight: 600, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer' }}>
+                   <FaPaperPlane size={16} /> Send to Doctor
+                </button>
+                <button onClick={generatePDF} style={{ height: '52px', background: 'transparent', color: 'var(--accent)', border: '1.5px solid var(--accent)', borderRadius: 'var(--radius-md)', font: '15px "DM Sans", sans-serif', fontWeight: 600, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer' }}>
+                   <FaDownload size={16} /> Download PDF
+                </button>
+              </>
+            )}
           </div>
 
           <div onClick={() => navigate('/asha/dashboard')} style={{ textAlign: 'center', font: '14px "DM Sans", sans-serif', color: 'var(--text-tertiary)', marginTop: '8px', textDecoration: 'underline', cursor: 'pointer' }}>

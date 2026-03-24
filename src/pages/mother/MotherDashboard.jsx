@@ -50,15 +50,24 @@ const MotherDashboard = () => {
   const [avatarErr, setAvatarErr] = useState(false);
   
   React.useEffect(() => {
+    console.log("[DEBUG] Profile Survey Status:", profile?.isSurveyCompleted);
     if (profile && profile.isSurveyCompleted === false) {
+      console.warn("[DEBUG] Redirecting to Survey...");
       navigate('/mother/medical-history');
     }
   }, [profile, navigate]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [reportGenerated, setReportGenerated] = useState(false);
+  const [isSending, setIsSending] = useState(false);
   const { vitals, latestVitals } = useVitals(profile?.uid);
   const { surveys } = useSurveys(profile?.uid);
   const latestSurvey = surveys && surveys.length > 0 ? surveys[0] : null;
+  const [toast, setToast] = useState('');
+
+  const showToast = (msg) => {
+    setToast(msg);
+    setTimeout(() => setToast(''), 3000);
+  };
 
   const currentHr = latestVitals?.heartRate || 72;
   const currentSpo2 = latestVitals?.spO2 || 98;
@@ -80,14 +89,21 @@ const MotherDashboard = () => {
     }
   };
 
-  const handleSendToDoctor = () => {
+  const handleSendToDoctor = (e) => {
+    e.preventDefault();
+    if (isSending) return;
+
     if (profile?.linkedDoctorId || profile?.linkedDoctorEmail) {
-      alert(`Report sent to Dr. ${profile?.linkedDoctorName || 'Sharma'}`);
+      setIsSending(true);
+      showToast(`Report sent to Dr. ${profile?.linkedDoctorName || 'Sharma'}`);
+      setTimeout(() => setIsSending(false), 3000);
     } else {
-      const email = prompt("Link a Doctor: Enter your doctor's email or phone number to send this report:");
+      const email = prompt("Link a Doctor: Enter your doctor's email or phone number:");
       if (email) {
-        alert("Doctor linked and report sent successfully!");
-        setReportGenerated(false);
+        setIsSending(true);
+        showToast("Doctor linked and report sent successfully!");
+        // Keep the button visible but maybe in a disabled/sent state
+        setTimeout(() => setIsSending(false), 3000);
       }
     }
   };
@@ -142,7 +158,28 @@ const MotherDashboard = () => {
         }
         .md-report-card:hover { border-color: var(--accent) !important; }
         .md-search:focus { border-color: var(--accent) !important; outline: none; }
+        
+        .vitals-grid { 
+          display: grid; 
+          grid-template-columns: repeat(3, 1fr); 
+          gap: 12px; 
+        }
+        @media (max-width: 600px) {
+          .vitals-grid { grid-template-columns: 1fr 1fr; }
+          .vitals-grid > div:last-child { grid-column: span 2; }
+        }
+
+        .toast-msg {
+          position: fixed; top: 80px; left: 50%; transform: translateX(-50%);
+          background: #191c1d; color: white; padding: 12px 24px;
+          border-radius: 100px; font-size: 14px; font-weight: 600;
+          z-index: 2000; box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+          white-space: nowrap; animation: slideIn 0.3s ease;
+        }
+        @keyframes slideIn { from { top: 60px; opacity: 0; } to { top: 80px; opacity: 1; } }
       `}} />
+
+      {toast && <div className="toast-msg">{toast}</div>}
 
       <header className="responsive-px" style={{
         ...card, borderLeft: 'none', borderRight: 'none', borderTop: 'none',
@@ -214,17 +251,6 @@ const MotherDashboard = () => {
           <span style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>{text.updated}</span>
         </div>
         <div className="vitals-grid">
-          <style dangerouslySetInnerHTML={{__html: `
-            .vitals-grid { 
-              display: grid; 
-              grid-template-columns: repeat(3, 1fr); 
-              gap: 12px; 
-            }
-            @media (max-width: 600px) {
-              .vitals-grid { grid-template-columns: 1fr 1fr; }
-              .vitals-grid > div:last-child { grid-column: span 2; }
-            }
-          `}} />
           <div className="responsive-p" style={{ ...card, padding: '16px 12px', textAlign: 'center' }}>
             <div style={{ width: '44px', height: '44px', borderRadius: '50%', margin: '0 auto 10px auto', background: 'var(--danger-light)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><FaHeartbeat size={22} color="var(--danger)" /></div>
             <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-tertiary)', marginBottom: '6px' }}>{text.hr}</div>
@@ -290,8 +316,27 @@ const MotherDashboard = () => {
           </button>
 
           {reportGenerated && (
-            <button onClick={handleSendToDoctor} style={{ height: '48px', width: '100%', background: 'var(--success-light)', color: 'var(--success)', borderRadius: 'var(--radius-md)', border: '1.5px solid var(--success)', fontSize: '14px', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer' }}>
-               <FaDownload size={14} style={{ transform: 'rotate(-90deg)' }} /> {language === 'te' ? 'నా డాక్టరుకు పంపండి' : 'Send to My Doctor'}
+            <button 
+              type="button"
+              disabled={isSending}
+              onClick={handleSendToDoctor} 
+              style={{ 
+                height: '48px', width: '100%', 
+                background: isSending ? 'var(--bg-secondary)' : 'var(--success-light)', 
+                color: isSending ? 'var(--text-tertiary)' : 'var(--success)', 
+                borderRadius: 'var(--radius-md)', 
+                border: isSending ? '1.5px solid var(--border)' : '1.5px solid var(--success)', 
+                fontSize: '14px', fontWeight: 600, 
+                display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                gap: '8px', cursor: isSending ? 'not-allowed' : 'pointer',
+                transition: 'all 0.2s',
+                opacity: isSending ? 0.7 : 1
+              }}
+            >
+               <FaDownload size={14} style={{ transform: 'rotate(-90deg)' }} /> 
+               {isSending 
+                 ? (language === 'te' ? 'పంపబడింది' : 'Report Sent!') 
+                 : (language === 'te' ? 'నా డాక్టరుకు పంపండి' : 'Send to My Doctor')}
             </button>
           )}
         </div>

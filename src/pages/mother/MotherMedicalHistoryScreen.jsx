@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { FaArrowLeft, FaVolumeUp, FaBabyCarriage, FaFileMedical, FaHeartbeat, FaMicrophone, FaStop, FaSpinner } from 'react-icons/fa';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../hooks/useAuth';
@@ -166,6 +166,7 @@ export default function MotherMedicalHistoryScreen() {
   const navigate = useNavigate();
   const { profile, updateProfile } = useAuth();
   const { language, toggleLanguage } = useLanguage();
+  const { isGuest = false } = useLocation().state || {};
   
   const [answers, setAnswers] = useState(profile?.medicalHistory || {});
   const [otherText, setOtherText] = useState(profile?.medicalHistoryOther || {});
@@ -244,16 +245,47 @@ export default function MotherMedicalHistoryScreen() {
 
     setLoading(true);
     try {
-      if (updateProfile) {
+      const readableHistory = {};
+      QUESTIONS.forEach(q => {
+        const idx = answers[q.id];
+        if (idx === OTHER_IDX) {
+          readableHistory[q.en] = otherText[q.id];
+        } else if (idx !== undefined) {
+          readableHistory[q.en] = q.options_en[idx];
+        } else {
+          readableHistory[q.en] = 'Not Answered';
+        }
+      });
+
+      if (updateProfile && !isGuest) {
         await updateProfile({
           ...profile,
-          medicalHistory: answers,
-          medicalHistoryOther: otherText,
+          medicalHistory: readableHistory,
           isSurveyCompleted: true
         });
       }
-      setToast(ui.saved);
-      setTimeout(() => navigate('/mother/dashboard'), 1500);
+      
+      if (isGuest) {
+        // Construct the results state
+        const guestQuestions = QUESTIONS.map(q => ({
+          id: q.id,
+          text: language === 'te' ? q.te : q.en,
+          options: language === 'te' ? q.options_te : q.options_en
+        }));
+        
+        navigate('/shared/ai-report', {
+          state: {
+            questions: guestQuestions,
+            answers,
+            isGuest: true,
+            patient: { name: 'Guest User', age: 'N/A' }
+          }
+        });
+      } else {
+        setToast(ui.saved);
+        const { fromProfile = false } = location.state || {};
+        setTimeout(() => navigate(fromProfile ? '/mother/profile' : '/mother/dashboard'), 1500);
+      }
     } catch (err) {
       setToast("Error saving medical history");
       setTimeout(() => setToast(''), 3000);

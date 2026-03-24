@@ -45,7 +45,28 @@ const LoginScreen = () => {
 
   const handleGoogleLogin = async () => {
     try {
-      await loginWithGoogle(role, initialType, mode === 'signup');
+      const result = await loginWithGoogle();
+      if (result.isNewUser) {
+        // Redirect to role setup if first time login
+        navigate('/role-setup', { 
+          state: { 
+            preSelectedRole: role,
+            preSelectedType: initialType 
+          } 
+        });
+      } else if (result.profile) {
+        // Direct to dashboard if profile exists
+        const userRole = result.profile.role;
+        const pType = result.profile.patientType;
+        
+        let target = `/${userRole}/dashboard`;
+        if (userRole === 'patient') {
+          target = pType === 'wellness' ? '/dashboard/wellness' : '/dashboard/elderly';
+        } else if (userRole === 'caretaker') {
+          target = '/family-dashboard';
+        }
+        navigate(target, { replace: true });
+      }
     } catch (err) {
       console.error(err);
       alert(language === 'en' ? 'Auth failed' : 'లాగిన్ విఫలమైంది');

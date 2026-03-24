@@ -85,7 +85,22 @@ const generatePDF = (patientData, reportType = "instant", mode = "download") => 
   doc.text("MEDICAL BACKGROUND SUMMARY", 20, 85);
 
   const hist = data.medicalHistory;
-  const historyText = `Patient has a history of ${hist.conditions.join(" and ")}. Currently on ${hist.medications.join(", ")}. ${hist.pastComplications} reported.`;
+  let historyText = "";
+
+  if (hist && typeof hist === 'object') {
+    if (Array.isArray(hist.answers)) {
+      // Elderly Format
+      historyText = hist.answers.map(a => `${a.question}: ${a.answer}`).join(". ");
+    } else if (hist.conditions) {
+      // Old Mock Format
+      historyText = `Patient history of ${hist.conditions.join(" & ")}. Medications: ${hist.medications.join(", ")}.`;
+    } else {
+      // Key-Value Format (Mother / Wellness)
+      historyText = Object.entries(hist).map(([q, a]) => `${q}: ${a}`).join(". ");
+    }
+  } else {
+    historyText = "No previous medical history recorded.";
+  }
   
   doc.setFont("helvetica", "normal");
   const splitHistory = doc.splitTextToSize(historyText, 160);

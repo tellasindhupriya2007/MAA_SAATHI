@@ -3,6 +3,7 @@ import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { FaArrowLeft, FaFilePdf, FaDownload, FaCheckCircle, FaUser, FaMicrophone, FaPlay } from 'react-icons/fa';
 import DoctorLayout from '../../layouts/DoctorLayout';
 import { useLanguage } from '../../context/LanguageContext';
+import { generateProfessionalReport } from '../../utils/generatePdfReport';
 
 const ReportViewerScreen = () => {
   const navigate = useNavigate();
@@ -16,7 +17,12 @@ const ReportViewerScreen = () => {
     asha: 'Kamala',
     date: 'Yesterday, 2:15 PM',
     urgency: 'MODERATE',
-    status: 'Viewed'
+    status: 'Viewed',
+    medicalHistory: {
+       "Is this your first pregnancy?": "Yes",
+       "Any known allergies?": "None",
+       "Recent symptoms": "Mild nausea"
+    }
   };
 
   const dummyData = {
@@ -72,7 +78,11 @@ const ReportViewerScreen = () => {
   const text = t[language] || t.en;
 
   const handleDownload = () => {
-    alert("Generating and initiating PDF download for " + report.name + "...");
+    generateProfessionalReport({
+      name: report.name,
+      medicalHistory: report.medicalHistory,
+      patientType: report.patientType || 'mother'
+    }, 'instant', 'download');
   };
 
   const handleReview = () => {
@@ -159,19 +169,28 @@ const ReportViewerScreen = () => {
           </div>
         </div>
 
-        {/* ── SURVEY RESPONSES ── */}
+        {/* ── SURVEY RESPONSES (Dynamic from Medical History) ── */}
         <div style={sectionStyle}>
           <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: '12px' }}>{text.responses}</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {dummyData.responses.map((res, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border-subtle)' }}>
-                <span style={{ fontSize: '14px', color: 'var(--text-secondary)', flex: 1 }}>{res.q}</span>
-                <span style={{
-                  fontSize: '14px', fontWeight: 600, flex: 1, textAlign: 'right',
-                  color: res.danger ? 'var(--danger)' : 'var(--text-primary)'
-                }}>{res.a}</span>
-              </div>
-            ))}
+            {report.medicalHistory ? (
+              Object.entries(report.medicalHistory).map(([q, a], i) => (
+                <div key={i} style={{ display: 'flex', flexDirection: 'column', padding: '8px 0', borderBottom: '1px solid var(--border-subtle)' }}>
+                  <span style={{ fontSize: '13px', color: 'var(--text-tertiary)', fontWeight: 600 }}>{q}</span>
+                  <span style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', marginTop: '4px' }}>{a}</span>
+                </div>
+              ))
+            ) : (
+              dummyData.responses.map((res, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border-subtle)' }}>
+                  <span style={{ fontSize: '14px', color: 'var(--text-secondary)', flex: 1 }}>{res.q}</span>
+                  <span style={{
+                    fontSize: '14px', fontWeight: 600, flex: 1, textAlign: 'right',
+                    color: res.danger ? 'var(--danger)' : 'var(--text-primary)'
+                  }}>{res.a}</span>
+                </div>
+              ))
+            )}
           </div>
         </div>
 

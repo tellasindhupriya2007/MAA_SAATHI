@@ -53,8 +53,8 @@ const ElderlyDashboard = () => {
   const latest = firestoreLatest || displayVitals[0];
 
   const aiStatus = profile?.aiAssessment?.aiStatus || 'STABLE';
-  const aiText = profile?.aiAssessment?.aiParagraphEnglish || (profile?.elderlyHealthProfile 
-    ? "Based on your clinical profile, your hypertension is well-managed. Continue Metformin as prescribed."
+  const aiText = profile?.aiAssessment?.aiParagraphEnglish || (profile?.medicalHistory 
+    ? "Based on your clinical profile, your hypertension is well-managed. Continue prescribed care."
     : "Vital signs are stable. Complete your weekly survey for deeper AI analysis.");
 
   const currentHr = latest?.heartRate || 72;

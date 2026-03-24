@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   FaEdit, FaCamera, FaSignOutAlt, FaUser, 
   FaBabyCarriage, FaBroadcastTower, FaHeartbeat,
-  FaCheck, FaTimes, FaSpinner, FaClock
+  FaCheck, FaTimes, FaSpinner, FaClock, FaUserCircle
 } from 'react-icons/fa';
 import MotherLayout from '../../layouts/MotherLayout';
 import { useAuth } from '../../hooks/useAuth';
@@ -13,6 +13,7 @@ const MotherProfileScreen = () => {
   const navigate = useNavigate();
   const { user, profile, logout, updateProfile } = useAuth();
   const { language } = useLanguage();
+  const patientType = profile?.patientType || 'mother';
 
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -44,6 +45,7 @@ const MotherProfileScreen = () => {
       pregnancy: "Pregnancy Details",
       ring: "Smart Ring Information",
       updateHistory: "Update Health History",
+      healthHistory: "Health Background",
       logout: "Secure Logout",
       save: "Save Changes",
       cancel: "Cancel",
@@ -75,6 +77,7 @@ const MotherProfileScreen = () => {
       pregnancy: "గర్భం వివరాలు",
       ring: "స్మార్ట్ రింగ్ సమాచారం",
       updateHistory: "ఆరోగ్య చరిత్రను నవీకరించండి",
+      healthHistory: "ఆరోగ్య చరిత్ర",
       logout: "సురక్షిత లాగ్‌అవుట్",
       save: "మార్పులను సేవ్ చేయి",
       cancel: "రద్దు చేయి",
@@ -311,15 +314,39 @@ const MotherProfileScreen = () => {
           </div>
           <div style={{
             display: 'inline-block',
-            background: formData.status === 'Pregnant' ? 'var(--accent-light)' : 'var(--info-light)',
-            color: formData.status === 'Pregnant' ? 'var(--accent)' : 'var(--info)',
+            background: patientType === 'mother' ? 'var(--accent-light)' : (patientType === 'elderly' ? '#FEE2E2' : '#DCFCE7'),
+            color: patientType === 'mother' ? 'var(--accent)' : (patientType === 'elderly' ? '#991B1B' : '#166534'),
             padding: '4px 12px', borderRadius: '100px', fontSize: '12px', fontWeight: 600
           }}>
-            {formData.status === 'Pregnant' ? text.pregnant : text.newMother}
+            {patientType.toUpperCase()}
           </div>
           <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-            {formData.status === 'Pregnant' ? `${formData.weeks} Weeks Pregnant` : '3 Months Postpartum'}
+             Active Patient Account
           </div>
+        </div>
+      </div>
+
+      {/* ── HEALTH SUMMARY CARD (NEW) ── */}
+      <div className="px-mobile-16" style={cardStyle}>
+        <div style={headerStyle}>
+          <FaUserCircle size={16} color="var(--accent)" />
+          <span style={{ fontSize: '15px', fontWeight: 600 }}>{text.healthHistory}</span>
+        </div>
+        <div style={{ padding: '20px 24px' }}>
+          {profile?.medicalHistory ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+               {Object.entries(profile.medicalHistory).slice(0, 5).map(([q, a], i) => (
+                 <div key={i} style={{ borderBottom: '1px solid var(--border-subtle)', paddingBottom: '8px' }}>
+                    <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', fontWeight: 600 }}>{q}</div>
+                    <div style={{ fontSize: '14px', color: 'var(--text-primary)', fontWeight: 500 }}>{typeof a === 'string' ? a : 'Recorded'}</div>
+                 </div>
+               ))}
+            </div>
+          ) : (
+            <div style={{ textAlign: 'center', padding: '12px 0' }}>
+               <div style={{ fontSize: '14px', color: 'var(--text-tertiary)' }}>No health history recorded yet</div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -366,31 +393,33 @@ const MotherProfileScreen = () => {
         </div>
       </div>
 
-      {/* ── PREGNANCY DETAILS CARD ── */}
-      <div className="px-mobile-16" style={cardStyle}>
-        <div style={headerStyle}>
-          <FaBabyCarriage size={16} color="var(--accent)" />
-          <span style={{ fontSize: '15px', fontWeight: 600 }}>{text.pregnancy}</span>
+      {/* ── PREGNANCY DETAILS CARD (Mother Only) ── */}
+      {patientType === 'mother' && (
+        <div className="px-mobile-16" style={cardStyle}>
+          <div style={headerStyle}>
+            <FaBabyCarriage size={16} color="var(--accent)" />
+            <span style={{ fontSize: '15px', fontWeight: 600 }}>{text.pregnancy}</span>
+          </div>
+          <div style={{ padding: '0 24px', display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
+            <div style={{ padding: '13px 0', borderBottom: '1px solid var(--border-subtle)', borderRight: '1px solid var(--border-subtle)', paddingRight: '12px' }}>
+              <label style={labelStyle}>{text.weeks}</label>
+              {isEditing ? <input style={inputStyle} value={formData.weeks} onChange={e => handleChange('weeks', e.target.value)} className="prof-input" /> : <span style={valueStyle}>{formData.weeks} Weeks</span>}
+            </div>
+            <div style={{ padding: '13px 0', borderBottom: '1px solid var(--border-subtle)', paddingLeft: '12px' }}>
+              <label style={labelStyle}>{text.edd}</label>
+              {isEditing ? <input style={inputStyle} value={formData.edd} onChange={e => handleChange('edd', e.target.value)} className="prof-input" /> : <span style={valueStyle}>{formData.edd}</span>}
+            </div>
+            <div style={{ padding: '13px 0', borderRight: '1px solid var(--border-subtle)', paddingRight: '12px' }}>
+              <label style={labelStyle}>{text.prev}</label>
+              {isEditing ? <input style={inputStyle} value={formData.gravida} onChange={e => handleChange('gravida', e.target.value)} className="prof-input" /> : <span style={valueStyle}>{formData.gravida}</span>}
+            </div>
+            <div style={{ padding: '13px 0', paddingLeft: '12px' }}>
+              <label style={labelStyle}>{text.plan}</label>
+              {isEditing ? <input style={inputStyle} value={formData.plan} onChange={e => handleChange('plan', e.target.value)} className="prof-input" /> : <span style={valueStyle}>{formData.plan}</span>}
+            </div>
+          </div>
         </div>
-        <div style={{ padding: '0 24px', display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
-          <div style={{ padding: '13px 0', borderBottom: '1px solid var(--border-subtle)', borderRight: '1px solid var(--border-subtle)', paddingRight: '12px' }}>
-            <label style={labelStyle}>{text.weeks}</label>
-            {isEditing ? <input style={inputStyle} value={formData.weeks} onChange={e => handleChange('weeks', e.target.value)} className="prof-input" /> : <span style={valueStyle}>{formData.weeks} Weeks</span>}
-          </div>
-          <div style={{ padding: '13px 0', borderBottom: '1px solid var(--border-subtle)', paddingLeft: '12px' }}>
-            <label style={labelStyle}>{text.edd}</label>
-            {isEditing ? <input style={inputStyle} value={formData.edd} onChange={e => handleChange('edd', e.target.value)} className="prof-input" /> : <span style={valueStyle}>{formData.edd}</span>}
-          </div>
-          <div style={{ padding: '13px 0', borderRight: '1px solid var(--border-subtle)', paddingRight: '12px' }}>
-            <label style={labelStyle}>{text.prev}</label>
-            {isEditing ? <input style={inputStyle} value={formData.gravida} onChange={e => handleChange('gravida', e.target.value)} className="prof-input" /> : <span style={valueStyle}>{formData.gravida}</span>}
-          </div>
-          <div style={{ padding: '13px 0', paddingLeft: '12px' }}>
-            <label style={labelStyle}>{text.plan}</label>
-            {isEditing ? <input style={inputStyle} value={formData.plan} onChange={e => handleChange('plan', e.target.value)} className="prof-input" /> : <span style={valueStyle}>{formData.plan}</span>}
-          </div>
-        </div>
-      </div>
+      )}
 
       {/* ── RING INFORMATION CARD ── */}
       <div className="px-mobile-16" style={{ ...cardStyle, padding: '20px 24px' }}>
@@ -437,7 +466,10 @@ const MotherProfileScreen = () => {
       {/* ── BUTTONS ── */}
       <div className="px-mobile-16" style={{ padding: '0 24px 24px 24px' }}>
         <button 
-          onClick={() => navigate('/mother/health-history')}
+          onClick={() => {
+            const surveyPath = patientType === 'mother' ? '/mother/medical-history' : (patientType === 'elderly' ? '/elderly/health-survey' : '/wellness/health-survey');
+            navigate(surveyPath, { state: { fromProfile: true } });
+          }}
           style={{
             width: '100%', height: '52px', background: 'var(--accent-subtle)',
             color: 'var(--accent)', border: '1.5px solid var(--accent)',

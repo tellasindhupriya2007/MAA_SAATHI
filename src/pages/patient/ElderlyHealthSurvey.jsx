@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   FaArrowLeft, FaCalendarAlt, FaHeartbeat, FaPills, 
   FaWalking, FaUserFriends, FaBrain, FaLungs, 
@@ -119,6 +119,7 @@ const ElderlyHealthSurvey = () => {
   const navigate = useNavigate();
   const { language, toggleLanguage } = useLanguage();
   const { profile } = useAuth();
+  const { isGuest = false } = useLocation().state || {};
   
   const [answers, setAnswers] = useState({});
   const [otherText, setOtherText] = useState({});
@@ -130,12 +131,12 @@ const ElderlyHealthSurvey = () => {
   const isComplete = answeredCount === t.questions.length;
   const progressPercent = (answeredCount / t.questions.length) * 100;
 
-  // Check if profile exists and redirect
+  // Check if profile exists and redirect (Only if NOT guest)
   useEffect(() => {
-    if (profile?.elderlyHealthProfile) {
+    if (!isGuest && profile?.medicalHistory) {
       navigate('/dashboard/elderly');
     }
-  }, [profile, navigate]);
+  }, [profile, navigate, isGuest]);
 
   const handleSelect = (qId, optIdx) => {
     setAnswers(prev => ({ ...prev, [qId]: optIdx }));
@@ -178,7 +179,7 @@ const ElderlyHealthSurvey = () => {
 
         // Save to Firebase
         await updateDoc(doc(db, 'users', profile.uid), {
-          elderlyHealthProfile: {
+          medicalHistory: {
             answers: profileAnswers,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
@@ -217,7 +218,28 @@ const ElderlyHealthSurvey = () => {
         }
       }
       
-      setTimeout(() => { navigate('/dashboard/elderly'); }, 1500);
+      if (isGuest) {
+        // Construct basic result for the result screen
+        let aiStatus = 'STABLE';
+        const criticalSigns = ['Heart Disease', 'Severe breathing distress', 'Frequent falls', 'Chest pain / Palpitations'];
+        const moderateSigns = ['High Blood Pressure', 'Diabetes', 'Shortness of breath on walking', '1 or more falls'];
+        const rawAnswers = profileAnswers.map(a => a.answer);
+        if (rawAnswers.some(ans => criticalSigns.includes(ans))) aiStatus = 'CRITICAL';
+        else if (rawAnswers.some(ans => moderateSigns.includes(ans))) aiStatus = 'MODERATE';
+
+        navigate('/shared/ai-report', { 
+          state: { 
+            answers, 
+            questions: t.questions,
+            isGuest: true,
+            aiStatus,
+            patient: { name: 'Guest User', age: answers.age || 'Unknown' }
+          } 
+        });
+      } else {
+        const { fromProfile = false } = useLocation().state || {};
+        setTimeout(() => { navigate(fromProfile ? '/mother/profile' : '/dashboard/elderly'); }, 1500);
+      }
     } catch (err) {
       console.error(err);
       setIsSubmitting(false);

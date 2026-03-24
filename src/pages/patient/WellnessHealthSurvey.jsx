@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   FaArrowLeft, FaCalendarAlt, FaHeartbeat, FaRunning, FaBed, 
   FaAppleAlt, FaBrain, FaWeight, FaSyringe, FaMagic, 
@@ -129,6 +129,7 @@ const WellnessHealthSurvey = () => {
   const navigate = useNavigate();
   const { language, toggleLanguage } = useLanguage();
   const { user } = useAuth();
+  const { isGuest = false } = useLocation().state || {};
   
   const [answers, setAnswers] = useState({});
   const [otherText, setOtherText] = useState({});
@@ -155,12 +156,26 @@ const WellnessHealthSurvey = () => {
     try {
       if (user?.uid) {
         await updateDoc(doc(db, 'users', user.uid), {
-          wellnessProfile: profile,
+          medicalHistory: profile,
           patientType: 'wellness',
           isSurveyCompleted: true
         });
       }
-      setTimeout(() => navigate('/dashboard/wellness'), 1500);
+      
+      if (isGuest) {
+        navigate('/shared/ai-report', { 
+          state: { 
+            answers: profile, 
+            questions: t.questions,
+            isGuest: true,
+            aiStatus: 'STABLE', // Default for wellness guests
+            patient: { name: 'Guest User' }
+          } 
+        });
+      } else {
+        const { fromProfile = false } = useLocation().state || {};
+        setTimeout(() => navigate(fromProfile ? '/mother/profile' : '/dashboard/wellness'), 1500);
+      }
     } catch (err) {
       console.error(err);
       setIsSubmitting(false);

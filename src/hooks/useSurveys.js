@@ -32,7 +32,8 @@ export function useSurveys(patientId = null, ashaWorkerId = null) {
       setSurveys(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       setLoading(false);
     }, (error) => {
-      console.error("Surveys collection error:", error);
+      console.warn("Survey Fetch Failed (Backend not initialized):", error.message);
+      setSurveys([]);
       setLoading(false);
     });
 

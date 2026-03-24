@@ -14,11 +14,11 @@ export const AppProvider = ({ children }) => {
 
   const addPatient = (newPatient) => {
     // Ensure type is ALWAYS exactly 'pregnant' or 'newMother'
-    const safeType = newPatient.type === 'newMother' ? 'newMother' : 'pregnant';
+    const safeType = newPatient.type?.toLowerCase() === 'newmother' ? 'newMother' : 'pregnant';
     const p = {
       ...newPatient,
       type: safeType,
-      id: 'p' + Date.now(),
+      id: newPatient.id || 'p' + Date.now(),
       house: newPatient.house || newPatient.houseNumber || '',
       location: (newPatient.houseNumber || newPatient.house || '') +
                 (newPatient.village ? ', ' + newPatient.village : ''),
