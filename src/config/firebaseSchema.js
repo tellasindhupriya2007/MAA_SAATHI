@@ -1,4 +1,4 @@
-import schema from '../../shared/firebase.common.schema.json';
+import schema from './firebase.common.schema.json';
 
 const isFiniteNumber = (value) => typeof value === 'number' && Number.isFinite(value);
 const isPlainObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);

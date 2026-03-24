@@ -2,6 +2,15 @@
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
+## Frontend Firebase Config
+
+All client Firebase config now lives in the frontend:
+
+1. Copy `.env.example` to `.env`
+2. Fill in your `VITE_FIREBASE_*` values from Firebase Project Settings
+
+The app reads Firebase client keys from `src/config/firebaseClientConfig.js`.
+
 Currently, two official plugins are available:
 
 - [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
