@@ -6,6 +6,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../hooks/useAuth';
 import { motion, AnimatePresence } from 'framer-motion';
+import { getRouteFromProfile } from '../../utils/authRedirect';
 
 const ROLE_IMAGES = {
   asha: '/login_asha_v11.png',
@@ -45,7 +46,32 @@ const LoginScreen = () => {
 
   const handleGoogleLogin = async () => {
     try {
-      await loginWithGoogle(role, initialType, mode === 'signup');
+      const result = await loginWithGoogle();
+
+      if (result?.firestoreUnavailable) {
+        alert(result.firestoreMessage || (language === 'en'
+          ? 'Google sign-in succeeded but profile storage is unavailable.'
+          : 'Google లాగిన్ విజయవంతమైంది కానీ ప్రొఫైల్ స్టోరేజ్ అందుబాటులో లేదు.'));
+        return;
+      }
+
+      if (result?.isNewUser || !result?.profile) {
+        if (role === 'patient' && !initialType) {
+          navigate('/patient-type-select', { replace: true });
+          return;
+        }
+
+        navigate('/role-setup', {
+          replace: true,
+          state: {
+            preSelectedRole: role,
+            preSelectedType: role === 'patient' ? initialType : ''
+          }
+        });
+        return;
+      }
+
+      navigate(getRouteFromProfile(result.profile), { replace: true });
     } catch (err) {
       console.error(err);
       alert(language === 'en' ? 'Auth failed' : 'లాగిన్ విఫలమైంది');

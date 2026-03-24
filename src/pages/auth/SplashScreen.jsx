@@ -4,6 +4,7 @@ import { FaHeartbeat } from 'react-icons/fa';
 import { useAuth } from '../../hooks/useAuth';
 // eslint-disable-next-line no-unused-vars
 import { motion } from 'framer-motion';
+import { getRouteFromProfile } from '../../utils/authRedirect';
 
 const SplashScreen = () => {
   const navigate = useNavigate();
@@ -13,20 +14,7 @@ const SplashScreen = () => {
     const timer = setTimeout(() => {
       if (!loading) {
         if (user && profile) {
-          // Navigate based on role
-          switch (profile.role) {
-            case 'asha':
-              navigate('/asha/dashboard');
-              break;
-            case 'doctor':
-              navigate('/doctor/dashboard');
-              break;
-            case 'mother':
-              navigate('/mother/dashboard');
-              break;
-            default:
-              navigate('/welcome');
-          }
+          navigate(getRouteFromProfile(profile));
         } else {
           navigate('/welcome');
         }
