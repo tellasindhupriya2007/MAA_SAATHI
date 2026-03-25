@@ -60,35 +60,6 @@ const toDoctorUrgency = (risk = '') => {
   return 'STABLE';
 };
 
-const MOCK_ALERTS = [
-  { 
-    id: 'al1', name: 'Sunita Devi', type: 'Ring SOS', alertStyle: 'sos', time: '10m ago', 
-    location: 'House 42, Ramgarh', trigger: 'Ring SOS button pressed', 
-    patientType: 'mother', phone: '+91 9876543210',
-    patient: { age: '24', weeks: '28', phone: '+91 9876543210' },
-    vitals: {
-      hr: '110 bpm',
-      spo2: '96%',
-      roomTemp: '26.4 °C',
-      roomHumidity: '54%',
-      bodyTemp: '36.8 °C'
-    }
-  },
-  { 
-    id: 'al2', name: 'Ram Singh', type: 'Fall Detected', alertStyle: 'fall', time: '1h ago', 
-    location: 'House 18, Sila', trigger: 'Accelerometer sensor trigger', 
-    patientType: 'elderly', phone: '+91 9988776655',
-    patient: { age: '68', weeks: '0', phone: '+91 9988776655' },
-    vitals: {
-      hr: '82 bpm',
-      spo2: '98%',
-      roomTemp: '24.9 °C',
-      roomHumidity: '51%',
-      bodyTemp: '36.6 °C'
-    }
-  }
-];
-
 const PDF_REPORTS = [
   { id: 'r1', name: 'Anjali Devi', age: '24', asha: 'Lakshmi', date: 'Today, 10:30 AM', urgency: 'CRITICAL', patientType: 'pregnant', phc: 'Ramgarh PHC' },
   { id: 'r2', name: 'Gopal Krishan', age: '72', asha: 'N/A', date: '2 hours ago', urgency: 'STABLE', patientType: 'elderly', phc: 'Main Ramgarh' },
@@ -131,7 +102,7 @@ const DoctorDashboard = () => {
         bodyTemp: withUnit(a.bodyTemp ?? a.bodyTemperature ?? a?.vitals?.bodyTemp, ' °C')
       }
     }));
-    return fireAlerts.length === 0 ? MOCK_ALERTS : [...fireAlerts, ...MOCK_ALERTS];
+    return fireAlerts;
   }, [firestoreAlerts]);
 
   const contextReports = useMemo(() => {

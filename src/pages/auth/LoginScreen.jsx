@@ -42,9 +42,11 @@ const LoginScreen = () => {
   const initialRole = location.state?.role || 'mother';
   const initialType = location.state?.type || '';
   const initialMode = location.state?.mode === 'signup' ? 'signup' : 'login';
+  const preSelectedRoleFromFlow = location.state?.role || '';
   const [role, setRole] = useState(initialRole);
   const [mode, setMode] = useState(initialMode); 
   const isLoginMode = mode === 'login';
+  const shouldShowRoleCards = mode === 'signup' && !preSelectedRoleFromFlow;
 
   const handleGoogleLogin = async () => {
     try {
@@ -81,7 +83,7 @@ const LoginScreen = () => {
 
       if (result?.isNewUser || !result?.profile) {
         if (isLoginMode) {
-          const hasKnownRole = Boolean(location.state?.role || role);
+          const hasKnownRole = Boolean(preSelectedRoleFromFlow);
           if (hasKnownRole) {
             navigate('/role-setup', {
               replace: true,
@@ -96,6 +98,11 @@ const LoginScreen = () => {
           navigate('/role-setup', { replace: true });
           return;
         }
+
+        if (preSelectedRoleFromFlow && preSelectedRoleFromFlow !== role) {
+          setRole(preSelectedRoleFromFlow);
+        }
+
         if (role === 'patient' && !initialType) {
           navigate('/patient-type-select', { replace: true, state: { mode: 'signup' } });
           return;
@@ -254,10 +261,10 @@ const LoginScreen = () => {
 
             <h1 style={{ fontSize: '32px', fontWeight: 800, color: '#191c1d', marginBottom: '8px' }}>{text.loginTitle}</h1>
             <p style={{ fontSize: '15px', color: '#594045', marginBottom: '32px' }}>
-              {isLoginMode ? text.loginSub : text.signupSub}
+              {isLoginMode ? text.loginSub : (shouldShowRoleCards ? text.signupSub : text.loginSub)}
             </p>
 
-            {!isLoginMode && (
+            {shouldShowRoleCards && (
               <div className="role-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '32px' }}>
                 {ROLES.map((r) => (
                   <div key={r.id} className="role-card" data-active={role === r.id} onClick={() => setRole(r.id)}>

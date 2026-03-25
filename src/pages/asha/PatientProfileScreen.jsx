@@ -51,9 +51,9 @@ const MOCK_PATIENT = {
   ],
   hasRing: true,
   vitals: {
-    hr: '82 bpm',
-    spo2: '98%',
-    steps: '4,230'
+    hr: '--',
+    spo2: '--',
+    steps: '--'
   }
 };
 
@@ -103,9 +103,9 @@ const toDisplayPatient = (source) => {
     visits: Array.isArray(source.visits) && source.visits.length > 0 ? source.visits : MOCK_PATIENT.visits,
     hasRing: source.hasRing ?? true,
     vitals: {
-      hr: source?.vitals?.hr || '82 bpm',
-      spo2: source?.vitals?.spo2 || '98%',
-      steps: source?.vitals?.steps || '4,230'
+      hr: source?.vitals?.hr || '--',
+      spo2: source?.vitals?.spo2 || '--',
+      steps: source?.vitals?.steps || '--'
     }
   };
 };
@@ -143,7 +143,7 @@ const toStorePatient = (viewPatient, previous = {}) => {
     babyWeight: viewPatient.details.babyWeight || previous.babyWeight || '',
     visits: viewPatient.visits || previous.visits || [],
     hasRing: viewPatient.hasRing ?? previous.hasRing ?? true,
-    vitals: viewPatient.vitals || previous.vitals || { hr: '82 bpm', spo2: '98%', steps: '4,230' }
+    vitals: viewPatient.vitals || previous.vitals || { hr: '--', spo2: '--', steps: '--' }
   };
 };
 

@@ -205,15 +205,24 @@ const PregnantMotherSurveyScreen = () => {
     if (hasError) return;
     // Build final answers object for AI
     const finalAnswers = {};
+    const finalQaPairs = [];
     t.questions.forEach((q, idx) => {
       const key = `q${idx}`;
+      let resolvedAnswer = 'Not answered';
       if (answers[key] === OTHER_IDX) {
-        finalAnswers[key] = otherText[key];
+        resolvedAnswer = otherText[key];
+        finalAnswers[key] = resolvedAnswer;
       } else if (answers[key] !== undefined) {
-        finalAnswers[key] = q.options[answers[key]];
+        resolvedAnswer = q.options[answers[key]];
+        finalAnswers[key] = resolvedAnswer;
       }
+      finalQaPairs.push({
+        id: key,
+        question: q.text,
+        answer: resolvedAnswer
+      });
     });
-    navigate('/shared/ai-report', { state: { answers: finalAnswers, patient } });
+    navigate('/shared/ai-report', { state: { answers: finalAnswers, qaPairs: finalQaPairs, patient } });
   };
 
   return (

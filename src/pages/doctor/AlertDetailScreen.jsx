@@ -34,20 +34,14 @@ const AlertDetailScreen = () => {
   const [resolving, setResolving] = useState(false);
 
   const alertData = location.state?.alert || {
-    id: id || 'al1',
-    name: 'Sunita Devi',
-    type: 'Ring SOS',
-    trigger: 'Ring SOS button pressed',
-    location: 'House 42, Ramgarh',
-    time: '10 mins ago',
-    vitals: {
-      hr: '110 bpm',
-      spo2: '96%',
-      roomTemp: '26.4 °C',
-      roomHumidity: '54%',
-      bodyTemp: '36.8 °C'
-    },
-    patient: { age: '24', weeks: '28', phone: '+91 9876543210' }
+    id: id || '',
+    name: 'Unknown Patient',
+    type: 'Alert',
+    trigger: 'No alert context available',
+    location: 'Unknown location',
+    time: 'Now',
+    vitals: {},
+    patient: { age: 'N/A', weeks: 'N/A', phone: '' }
   };
 
   const t = {
@@ -81,10 +75,10 @@ const AlertDetailScreen = () => {
   const handleResolve = async () => {
     setResolving(true);
     try {
-      if (alertData.id?.startsWith?.('al')) {
-        await new Promise(r => setTimeout(r, 600));
-      } else {
+      if (alertData.id) {
         await resolveAlert(alertData.id);
+      } else {
+        await new Promise((r) => setTimeout(r, 600));
       }
       setResolved(true);
       setShowConfirm(false);

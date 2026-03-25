@@ -11,6 +11,15 @@ All client Firebase config now lives in the frontend:
 
 The app reads Firebase client keys from `src/config/firebaseClientConfig.js`.
 
+## Gemini AI Report Setup
+
+The "Generate AI Report" feature uses a server endpoint at `/api/gemini-report`.
+
+1. Set `GEMINI_API_KEY` in your deployment environment (for example, Vercel Project Environment Variables).
+2. Optional for local-only fallback: set `VITE_GEMINI_API_KEY` in `.env`.
+
+Server key is preferred so the Gemini key is not exposed in browser code.
+
 Currently, two official plugins are available:
 
 - [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)

@@ -159,10 +159,24 @@ const WellnessHealthSurvey = () => {
       }
       
       if (isGuest) {
+        const qaPairs = t.questions.map((q, idx) => {
+          const key = `q${idx}`;
+          const answerText =
+            answers[key] === 'other'
+              ? ((otherText[key] || '').trim() || 'Not answered')
+              : q.options[answers[key]] || 'Not answered';
+          return {
+            id: q.id || key,
+            question: q.text,
+            answer: answerText
+          };
+        });
+
         navigate('/shared/ai-report', { 
           state: { 
             answers: surveyData, 
             questions: t.questions,
+            qaPairs,
             isGuest: true,
             aiStatus: 'STABLE',
             patient: { name: 'Guest User' }

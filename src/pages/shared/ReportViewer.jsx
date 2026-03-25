@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { FaArrowLeft, FaDownload, FaFileMedical, FaUserMd, FaExclamationTriangle, FaHeartbeat, FaLungs } from 'react-icons/fa';
+import { FaArrowLeft, FaDownload, FaFileMedical, FaUserMd, FaExclamationTriangle, FaHeartbeat, FaLungs, FaThermometerHalf, FaTint } from 'react-icons/fa';
 import { generateProfessionalReport } from '../../utils/generatePdfReport';
+import { useVitals } from '../../hooks/useVitals';
 
 const ReportViewer = () => {
   const { reportId } = useParams();
   const navigate = useNavigate();
   const [isGenerating, setIsGenerating] = useState(false);
+  const { latestVitals } = useVitals('patient_demo');
   
   // Mock data fetching based on ID
   const [report, setReport] = useState(null);
@@ -19,6 +21,17 @@ const ReportViewer = () => {
     };
     setReport(mockReports[reportId] || mockReports['rep1']);
   }, [reportId]);
+
+  const toNumber = (value, fallback = null) => {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+  };
+
+  const currentHr = toNumber(latestVitals?.heartRate ?? latestVitals?.hr ?? latestVitals?.heartRateAvg, null);
+  const currentSpo2 = toNumber(latestVitals?.spO2 ?? latestVitals?.spo2 ?? latestVitals?.spo2Avg, null);
+  const currentRoomTemp = toNumber(latestVitals?.roomTemperature ?? latestVitals?.roomTemp ?? latestVitals?.ambientTemperature, null);
+  const currentRoomHumidity = toNumber(latestVitals?.roomHumidity ?? latestVitals?.humidity ?? latestVitals?.relativeHumidity, null);
+  const currentBodyTemp = toNumber(latestVitals?.bodyTemperature ?? latestVitals?.bodyTemp ?? latestVitals?.temperature ?? latestVitals?.temperatureAvg, null);
 
   const handleDownload = () => {
     setIsGenerating(true);
@@ -83,14 +96,21 @@ const ReportViewer = () => {
                 <span style={{ fontSize: '16px', fontWeight: 800 }}>Vital Baseline</span>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div style={{ padding: '16px', background: 'var(--bg-secondary)', borderRadius: '16px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-tertiary)' }}>HEART RATE</div>
-                  <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)' }}>78 bpm</div>
-                </div>
-                <div style={{ padding: '16px', background: 'var(--bg-secondary)', borderRadius: '16px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-tertiary)' }}>BLOOD OXYGEN</div>
-                  <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)' }}>98%</div>
-                </div>
+                {[
+                  { key: 'hr', label: 'HEART RATE', value: currentHr !== null ? `${Math.round(currentHr)} bpm` : '--', icon: FaHeartbeat, color: 'var(--danger)' },
+                  { key: 'spo2', label: 'BLOOD OXYGEN', value: currentSpo2 !== null ? `${Math.round(currentSpo2)}%` : '--', icon: FaLungs, color: 'var(--info)' },
+                  { key: 'room-temp', label: 'ROOM TEMP', value: currentRoomTemp !== null ? `${currentRoomTemp.toFixed(1)}°C` : '--', icon: FaThermometerHalf, color: '#F59E0B' },
+                  { key: 'humidity', label: 'ROOM HUMIDITY', value: currentRoomHumidity !== null ? `${Math.round(currentRoomHumidity)}%` : '--', icon: FaTint, color: '#0D9488' },
+                  { key: 'body-temp', label: 'BODY TEMP', value: currentBodyTemp !== null ? `${currentBodyTemp.toFixed(1)}°C` : '--', icon: FaThermometerHalf, color: '#7C3AED' }
+                ].map((vital) => (
+                  <div key={vital.key} style={{ padding: '16px', background: 'var(--bg-secondary)', borderRadius: '16px', textAlign: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                      <vital.icon color={vital.color} size={12} />
+                      <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-tertiary)' }}>{vital.label}</div>
+                    </div>
+                    <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)' }}>{vital.value}</div>
+                  </div>
+                ))}
               </div>
             </section>
 

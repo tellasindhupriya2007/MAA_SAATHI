@@ -15,22 +15,6 @@ import { generateProfessionalReport } from '../../utils/generatePdfReport';
 import { db } from '../../config/firebase';
 import { collection, query, where, limit, onSnapshot, orderBy } from 'firebase/firestore';
 
-const generateMockVitals = (count = 7) => {
-  const data = [];
-  const now = Date.now();
-  for (let i = 0; i < count; i++) {
-    data.push({
-      heartRate: Math.floor(Math.random() * (85 - 65 + 1)) + 65,
-      spO2: Math.floor(Math.random() * (99 - 95 + 1)) + 95,
-      bodyTemperature: Number((Math.random() * (37.2 - 36.4) + 36.4).toFixed(1)),
-      roomTemperature: Number((Math.random() * (30 - 23) + 23).toFixed(1)),
-      roomHumidity: Math.floor(Math.random() * (68 - 40 + 1)) + 40,
-      timestamp: { seconds: Math.floor((now - i * 24 * 60 * 60 * 1000) / 1000) }
-    });
-  }
-  return data;
-};
-
 const toNumber = (value, fallback) => {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
@@ -38,19 +22,22 @@ const toNumber = (value, fallback) => {
 
 const normalizeVitalsEntry = (entry = {}) => {
   const bodyTemperature = toNumber(
-    entry.bodyTemperature ?? entry.temperature ?? entry.temperatureAvg,
-    36.6
+    entry.bodyTemperature ?? entry.bodyTemp ?? entry.temperature ?? entry.temperatureAvg,
+    null
   );
 
   return {
     ...entry,
-    heartRate: toNumber(entry.heartRate ?? entry.heartRateAvg, 72),
-    spO2: toNumber(entry.spO2 ?? entry.spo2 ?? entry.spo2Avg, 98),
+    heartRate: toNumber(entry.heartRate ?? entry.hr ?? entry.heartRateAvg, null),
+    spO2: toNumber(entry.spO2 ?? entry.spo2 ?? entry.spo2Avg, null),
     bodyTemperature,
-    roomTemperature: toNumber(entry.roomTemperature ?? entry.roomTemp ?? entry.ambientTemperature, 25.0),
-    roomHumidity: toNumber(entry.roomHumidity ?? entry.humidity ?? entry.relativeHumidity, 52)
+    roomTemperature: toNumber(entry.roomTemperature ?? entry.roomTemp ?? entry.ambientTemperature, null),
+    roomHumidity: toNumber(entry.roomHumidity ?? entry.humidity ?? entry.relativeHumidity, null)
   };
 };
+
+const formatVital = (value, digits = 0) =>
+  Number.isFinite(value) ? Number(value).toFixed(digits) : '--';
 
 const ElderlyDashboard = () => {
   const navigate = useNavigate();
@@ -67,9 +54,13 @@ const ElderlyDashboard = () => {
     }
   }, [profile, navigate]);
 
-  const { vitals: firestoreVitals, latestVitals: firestoreLatest } = useVitals(profile?.uid);
+  const vitalsCandidates = React.useMemo(
+    () => [profile?.patientId, profile?.uid, 'patient_demo'],
+    [profile?.patientId, profile?.uid]
+  );
+  const { vitals: firestoreVitals, latestVitals: firestoreLatest } = useVitals(vitalsCandidates);
   
-  const rawVitals = firestoreVitals && firestoreVitals.length > 0 ? firestoreVitals : generateMockVitals(7);
+  const rawVitals = firestoreVitals && firestoreVitals.length > 0 ? firestoreVitals : [];
   const displayVitals = rawVitals.map(normalizeVitalsEntry);
   const latest = normalizeVitalsEntry(firestoreLatest || rawVitals[0] || {});
 
@@ -151,7 +142,12 @@ const ElderlyDashboard = () => {
   const text = t[language] || t.en;
 
   const chartData = [...displayVitals].slice(0, 7).reverse().map(v => {
-    const ts = v.timestamp?.seconds ? new Date(v.timestamp.seconds * 1000) : new Date(v.timestamp);
+    const ts = v.timestamp?.seconds
+      ? new Date(v.timestamp.seconds * 1000)
+      : v.timestampMs
+        ? new Date(v.timestampMs)
+        : null;
+    if (!ts || Number.isNaN(ts.getTime())) return null;
     return {
       day: ts.toLocaleDateString('en-US', { weekday: 'short' }),
       hr: v.heartRate,
@@ -160,14 +156,14 @@ const ElderlyDashboard = () => {
       humidity: v.roomHumidity,
       bodyTemp: v.bodyTemperature
     };
-  });
+  }).filter(Boolean);
 
   const vitalCards = [
-    { icon: FaHeartbeat, label: text.hr, value: currentHr.toFixed(0), unit: 'bpm', color: 'var(--danger)', bg: 'var(--danger-light)' },
-    { icon: FaLungs, label: text.spo2, value: currentSpo2.toFixed(0), unit: '%', color: 'var(--info)', bg: 'var(--info-light)' },
-    { icon: FaThermometerHalf, label: text.roomTemp, value: currentRoomTemp.toFixed(1), unit: '°C', color: '#F59E0B', bg: '#FEF3C7' },
-    { icon: FaTint, label: text.roomHumidity, value: currentRoomHumidity.toFixed(0), unit: '%', color: '#0D9488', bg: '#CCFBF1' },
-    { icon: FaThermometerHalf, label: text.bodyTemp, value: currentBodyTemp.toFixed(1), unit: '°C', color: '#7C3AED', bg: '#EDE9FE' }
+    { icon: FaHeartbeat, label: text.hr, value: formatVital(currentHr, 0), unit: 'bpm', color: 'var(--danger)', bg: 'var(--danger-light)' },
+    { icon: FaLungs, label: text.spo2, value: formatVital(currentSpo2, 0), unit: '%', color: 'var(--info)', bg: 'var(--info-light)' },
+    { icon: FaThermometerHalf, label: text.roomTemp, value: formatVital(currentRoomTemp, 1), unit: '°C', color: '#F59E0B', bg: '#FEF3C7' },
+    { icon: FaTint, label: text.roomHumidity, value: formatVital(currentRoomHumidity, 0), unit: '%', color: '#0D9488', bg: '#CCFBF1' },
+    { icon: FaThermometerHalf, label: text.bodyTemp, value: formatVital(currentBodyTemp, 1), unit: '°C', color: '#7C3AED', bg: '#EDE9FE' }
   ];
 
   return (

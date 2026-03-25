@@ -1,21 +1,28 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  FaHeartbeat, FaLungs, FaWalking, FaPhone, 
+  FaHeartbeat, FaLungs, FaPhone, 
   FaBatteryThreeQuarters, FaBroadcastTower, 
   FaUserCircle, FaMapMarkerAlt, FaShieldAlt,
-  FaFilePdf, FaHistory
+  FaFilePdf, FaHistory, FaThermometerHalf, FaTint
 } from 'react-icons/fa';
 import { MdOutlineDarkMode, MdOutlineLightMode } from 'react-icons/md';
 import PatientLayout from '../../layouts/PatientLayout';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../context/ThemeContext';
+import { useVitals } from '../../hooks/useVitals';
 import { AppContext } from '../../context/AppContext';
 
 const getRelativeTime = (timestamp) => {
-  if (!timestamp) return 'just now';
-  const diffMs = Date.now() - timestamp;
+  const ts =
+    typeof timestamp?.toMillis === 'function'
+      ? timestamp.toMillis()
+      : typeof timestamp?.seconds === 'number'
+        ? timestamp.seconds * 1000
+        : Number(timestamp);
+  if (!Number.isFinite(ts)) return 'No live update';
+  const diffMs = Date.now() - ts;
   const mins = Math.max(0, Math.floor(diffMs / 60000));
   if (mins < 1) return 'just now';
   if (mins < 60) return `${mins} min${mins === 1 ? '' : 's'} ago`;
@@ -23,13 +30,40 @@ const getRelativeTime = (timestamp) => {
   return `${hours} hr${hours === 1 ? '' : 's'} ago`;
 };
 
+const toNumber = (value, fallback = null) => {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+};
+
 const CaretakerDashboard = () => {
   const navigate = useNavigate();
   const { language, toggleLanguage } = useLanguage();
   const { profile } = useAuth();
   const { theme, toggleTheme } = useTheme();
-  const { caretakerPatient, caretakerLive } = React.useContext(AppContext);
+  const { caretakerPatient } = React.useContext(AppContext);
   const [, setNow] = useState(Date.now());
+
+  const vitalsCandidates = React.useMemo(
+    () => [caretakerPatient?.id, caretakerPatient?.authUid, profile?.linkedPatientId, 'patient_demo'],
+    [caretakerPatient?.id, caretakerPatient?.authUid, profile?.linkedPatientId]
+  );
+  const { latestVitals } = useVitals(vitalsCandidates);
+  const live = latestVitals || {};
+  const liveHr = toNumber(live.heartRate ?? live.hr ?? live.heartRateAvg, null);
+  const liveSpo2 = toNumber(live.spO2 ?? live.spo2 ?? live.spo2Avg, null);
+  const liveRoomTemp = toNumber(live.roomTemperature ?? live.roomTemp ?? live.ambientTemperature, null);
+  const liveRoomHumidity = toNumber(live.roomHumidity ?? live.humidity ?? live.relativeHumidity, null);
+  const liveBodyTemp = toNumber(live.bodyTemperature ?? live.bodyTemp ?? live.temperature ?? live.temperatureAvg, null);
+  const liveBattery = toNumber(live.battery ?? live.batteryLevel, null);
+  const liveTimestamp = live.timestamp || live.createdAt || live.updatedAt || live.timestampMs;
+  const liveStatus =
+    liveSpo2 !== null && liveSpo2 < 93
+      ? 'critical'
+      : liveHr !== null && liveHr > 105
+        ? 'critical'
+        : (liveSpo2 !== null && liveSpo2 < 95) || (liveHr !== null && liveHr > 95)
+          ? 'attention'
+          : 'stable';
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 30000);
@@ -41,20 +75,24 @@ const CaretakerDashboard = () => {
     name: caretakerPatient.name,
     age: caretakerPatient.age || '--',
     location: caretakerPatient.location || `${caretakerPatient.house || ''}${caretakerPatient.village ? `, ${caretakerPatient.village}` : ''}`,
-    status: caretakerLive?.status || 'stable',
-    hr: caretakerLive?.hr ?? 78,
-    spo2: caretakerLive?.spo2 ?? 98,
-    steps: caretakerLive?.steps ?? 1100,
-    lastUpdate: getRelativeTime(caretakerLive?.updatedAt),
+    status: liveStatus,
+    hr: liveHr,
+    spo2: liveSpo2,
+    roomTemp: liveRoomTemp,
+    roomHumidity: liveRoomHumidity,
+    bodyTemp: liveBodyTemp,
+    lastUpdate: getRelativeTime(liveTimestamp),
     phone: caretakerPatient.phone || ''
   } : {
     name: 'No linked patient',
     age: '--',
     location: 'Link a patient to start monitoring',
     status: 'stable',
-    hr: 0,
-    spo2: 0,
-    steps: 0,
+    hr: null,
+    spo2: null,
+    roomTemp: null,
+    roomHumidity: null,
+    bodyTemp: null,
     lastUpdate: 'N/A',
     phone: ''
   };
@@ -127,22 +165,50 @@ const CaretakerDashboard = () => {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '24px' }}>
-            <div style={{ textAlign: 'center' }}>
-              <FaHeartbeat color="var(--danger)" style={{ marginBottom: '4px' }} />
-              <div style={{ fontSize: '10px', color: 'var(--text-tertiary)' }}>HEART RATE</div>
-              <div style={{ fontSize: '18px', fontWeight: 800 }}>{Math.round(linkedPatient.hr)} <span style={{ fontSize: '10px' }}>bpm</span></div>
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              <FaLungs color="var(--info)" style={{ marginBottom: '4px' }} />
-              <div style={{ fontSize: '10px', color: 'var(--text-tertiary)' }}>SPO2</div>
-              <div style={{ fontSize: '18px', fontWeight: 800 }}>{Math.round(linkedPatient.spo2)}%</div>
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              <FaWalking color="var(--success)" style={{ marginBottom: '4px' }} />
-              <div style={{ fontSize: '10px', color: 'var(--text-tertiary)' }}>STEPS</div>
-              <div style={{ fontSize: '18px', fontWeight: 800 }}>{Math.round(linkedPatient.steps).toLocaleString()}</div>
-            </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', marginBottom: '24px' }}>
+            {[
+              {
+                id: 'hr',
+                icon: FaHeartbeat,
+                color: 'var(--danger)',
+                label: 'HEART RATE',
+                value: linkedPatient.hr !== null ? `${Math.round(linkedPatient.hr)} bpm` : '--'
+              },
+              {
+                id: 'spo2',
+                icon: FaLungs,
+                color: 'var(--info)',
+                label: 'SPO2',
+                value: linkedPatient.spo2 !== null ? `${Math.round(linkedPatient.spo2)}%` : '--'
+              },
+              {
+                id: 'room-temp',
+                icon: FaThermometerHalf,
+                color: '#F59E0B',
+                label: 'ROOM TEMP',
+                value: linkedPatient.roomTemp !== null ? `${linkedPatient.roomTemp.toFixed(1)}°C` : '--'
+              },
+              {
+                id: 'humidity',
+                icon: FaTint,
+                color: '#0D9488',
+                label: 'ROOM HUMIDITY',
+                value: linkedPatient.roomHumidity !== null ? `${Math.round(linkedPatient.roomHumidity)}%` : '--'
+              },
+              {
+                id: 'body-temp',
+                icon: FaThermometerHalf,
+                color: '#7C3AED',
+                label: 'BODY TEMP',
+                value: linkedPatient.bodyTemp !== null ? `${linkedPatient.bodyTemp.toFixed(1)}°C` : '--'
+              }
+            ].map((item) => (
+              <div key={item.id} style={{ textAlign: 'center' }}>
+                <item.icon color={item.color} style={{ marginBottom: '4px' }} />
+                <div style={{ fontSize: '10px', color: 'var(--text-tertiary)' }}>{item.label}</div>
+                <div style={{ fontSize: '18px', fontWeight: 800 }}>{item.value}</div>
+              </div>
+            ))}
           </div>
 
           <div style={{ display: 'flex', gap: '10px' }}>
@@ -171,7 +237,9 @@ const CaretakerDashboard = () => {
                 <FaBroadcastTower color="var(--success)" />
                 <div>
                    <div style={{ fontSize: '14px', fontWeight: 600 }}>{text.ring}</div>
-                   <div style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>Battery {Math.round(caretakerLive?.battery ?? 84)}%</div>
+                   <div style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
+                     {liveBattery !== null ? `Battery ${Math.round(liveBattery)}%` : 'Battery N/A'}
+                   </div>
                 </div>
              </div>
              <div style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>{linkedPatient.lastUpdate}</div>

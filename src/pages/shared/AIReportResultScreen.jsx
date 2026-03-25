@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { FaCheckCircle, FaExclamationTriangle, FaExclamationCircle, FaVolumeUp, FaCheck, FaFilePdf, FaArrowLeft, FaRobot, FaStop, FaUserMd, FaDownload, FaPaperPlane } from 'react-icons/fa';
 import { jsPDF } from 'jspdf';
@@ -7,6 +7,17 @@ import { db } from '../../config/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { COLLECTIONS, validateFirestoreDocument } from '../../config/firebaseSchema';
 import { useAuth } from '../../hooks/useAuth';
+import { generateGeminiAssessment, normalizeSurveyResponses, isConcernAnswer } from '../../utils/geminiAssessment';
+
+const DEFAULT_PATIENT = { name: 'Suhana Khatun', age: 24, village: 'Ramgarh', house: '42' };
+const REPORT_CACHE_KEY = 'maa_saathi_last_ai_report_payload';
+
+const hasSurveyData = ({ qaPairs, questions, answers } = {}) => {
+  const hasPairs = Array.isArray(qaPairs) && qaPairs.length > 0;
+  const hasQuestions = Array.isArray(questions) && questions.length > 0;
+  const hasAnswers = answers && typeof answers === 'object' && Object.keys(answers).length > 0;
+  return hasPairs || hasQuestions || hasAnswers;
+};
 
 export default function AIReportResultScreen() {
   const location = useLocation();
@@ -14,46 +25,117 @@ export default function AIReportResultScreen() {
   const { language } = useLanguage();
   
   const [loading, setLoading] = useState(true);
-  const [result, setResult] = useState(null); // 'STABLE' | 'MODERATE' | 'CRITICAL'
-  const [aiText, setAiText] = useState('');
+  const [assessment, setAssessment] = useState(null);
+  const [analysisError, setAnalysisError] = useState('');
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [reportSent, setReportSent] = useState(false);
   const [toast, setToast] = useState('');
 
-  const { questions = [], answers = {}, isGuest = false } = location.state || {};
-  const patient = location.state?.patient || { name: 'Suhana Khatun', age: 24, village: 'Ramgarh', house: '42' };
+  const reportPayload = useMemo(() => {
+    const statePayload = location.state || {};
+    if (hasSurveyData(statePayload)) return statePayload;
+    try {
+      const raw = sessionStorage.getItem(REPORT_CACHE_KEY);
+      if (!raw) return statePayload;
+      const parsed = JSON.parse(raw);
+      return hasSurveyData(parsed) ? parsed : statePayload;
+    } catch {
+      return statePayload;
+    }
+  }, [location.state]);
+
+  const { questions = [], answers = {}, qaPairs = [], isGuest = false } = reportPayload;
+  const patient = reportPayload?.patient || DEFAULT_PATIENT;
+  const patientKey = `${patient?.id || ''}|${patient?.name || ''}|${patient?.age || ''}|${patient?.village || ''}|${patient?.house || ''}`;
+  const normalizedQaPairs = useMemo(
+    () => normalizeSurveyResponses({ qaPairs, questions, answers }),
+    [qaPairs, questions, answers]
+  );
+  const qaPairsForPdf = useMemo(
+    () =>
+      normalizedQaPairs.length > 0
+        ? normalizedQaPairs
+        : [
+            {
+              id: 'no-survey-data',
+              question: 'Survey responses were not found in this session.',
+              answer: 'Please complete the survey and generate the report again.'
+            }
+          ],
+    [normalizedQaPairs]
+  );
+  const result = assessment?.status || 'STABLE';
+  const aiText =
+    assessment?.summary ||
+    (language === 'te'
+      ? 'నివేదిక తయారు అవుతోంది. దయచేసి వేచి ఉండండి.'
+      : 'Assessment is being generated. Please wait.');
+  const concerns =
+    assessment?.concerns?.length
+      ? assessment.concerns
+      : result === 'STABLE'
+        ? ['No major danger signs were detected from submitted responses.']
+        : ['Elevated symptoms detected', 'Patient requires medical review'];
+  const recommendations =
+    assessment?.recommendations?.length
+      ? assessment.recommendations
+      : result === 'CRITICAL'
+        ? ['Schedule immediate physical examination', 'Cross-check latest clinical reports']
+        : result === 'MODERATE'
+          ? ['Review patient condition within 24-48 hours', 'Repeat key vitals and symptom checks']
+          : ['Continue routine follow-up care', 'Reassess if new symptoms appear'];
 
   useEffect(() => {
-    // Simulate Gemini API Call
+    if (!hasSurveyData({ qaPairs, questions, answers })) return;
+    try {
+      sessionStorage.setItem(
+        REPORT_CACHE_KEY,
+        JSON.stringify({
+          qaPairs,
+          questions,
+          answers,
+          isGuest,
+          patient
+        })
+      );
+    } catch {
+      // Ignore cache storage failures.
+    }
+  }, [qaPairs, questions, answers, isGuest, patientKey]);
+
+  useEffect(() => {
     const analyzeData = async () => {
       setLoading(true);
-      await new Promise(r => setTimeout(r, 2500));
-      
-      let score = 0;
-      Object.values(answers).forEach(val => { score += val; });
-      
-      if (score < 5) {
-        setResult('STABLE');
-        setAiText(language === 'en' 
-          ? "All vitals and reported symptoms are within normal ranges. Continue standard care and schedule the next routine visit."
-          : "అన్ని ప్రాణాధారాలు మరియు నివేదించబడిన లక్షణాలు సాధారణ పరిధిలో ఉన్నాయి. ప్రామాణిక సంరక్షణను కొనసాగించండి మరియు తదుపరి సాధారణ సందర్శనను షెడ్యూల్ చేయండి.");
-      } else if (score < 12) {
-        setResult('MODERATE');
-        setAiText(language === 'en'
-          ? "Patient reports some elevated symptoms including mild weakness. A doctor review is recommended within 48 hours."
-          : "రోగి తేలికపాటి బలహీనతతో సహా కొన్ని లక్షణాలను నివేదించారు. డాక్టర్ సమీక్ష 48 గంటల్లో సిఫార్సు చేయబడింది.");
-      } else {
-        setResult('CRITICAL');
-        setAiText(language === 'en'
-          ? "URGENT: Multiple danger signs detected including severe symptoms. Immediate medical referral to PHC is required."
-          : "అత్యవసరం: తీవ్రమైన లక్షణాలతో సహా బహుళ ప్రమాద సంకేతాలు కనుగొనబడ్డాయి. తక్షణ వైద్య నివేదన అవసరం.");
-        setReportSent(true); 
+      setAnalysisError('');
+
+      try {
+        const aiAssessment = await generateGeminiAssessment({
+          patient,
+          qaPairs: normalizedQaPairs,
+          language
+        });
+        setAssessment(aiAssessment);
+        setReportSent(aiAssessment.status === 'CRITICAL');
+      } catch (error) {
+        console.error('[AI_REPORT] Gemini assessment failed:', error);
+        setAnalysisError('Could not reach Gemini service. Showing fallback analysis.');
+        setAssessment({
+          status: 'MODERATE',
+          summary:
+            language === 'te'
+              ? 'AI సేవ అందుబాటులో లేదు. తాత్కాలిక విశ్లేషణను చూపిస్తున్నాము.'
+              : 'AI service is currently unavailable. Showing temporary assessment.',
+          concerns: ['Assessment service unavailable'],
+          recommendations: ['Please retry report generation in a moment'],
+          model: 'fallback-error'
+        });
       }
+
       setLoading(false);
     };
     
     analyzeData();
-  }, [answers, language]);
+  }, [language, normalizedQaPairs, patientKey]);
 
   const speakText = () => {
     if ('speechSynthesis' in window) {
@@ -191,12 +273,11 @@ export default function AIReportResultScreen() {
     doc.text("Answer", pageWidth / 2, 44);
 
     let yPos = 50;
-    questions.forEach((q, i) => {
-      const selectedOptIdx = answers[q.id];
-      const selectedAnswer = selectedOptIdx !== undefined ? q.options[selectedOptIdx] : "Not Answered";
-      const isDanger = selectedOptIdx >= 2;
-      
-      const qLines = doc.splitTextToSize(`Q${i+1}: ${q.text}`, (pageWidth / 2) - 30);
+    qaPairsForPdf.forEach((entry, i) => {
+      const selectedAnswer = entry.answer || "Not Answered";
+      const isDanger = isConcernAnswer(selectedAnswer);
+
+      const qLines = doc.splitTextToSize(`Q${i + 1}: ${entry.question}`, (pageWidth / 2) - 30);
       const aLines = doc.splitTextToSize(selectedAnswer, (pageWidth / 2) - 30);
       const maxLines = Math.max(qLines.length, aLines.length);
       const rowHeight = Math.max(20, maxLines * 5 + 10);
@@ -272,7 +353,7 @@ export default function AIReportResultScreen() {
        doc.setTextColor(198, 40, 40); // #C62828
        doc.text("Concerns Identified", 20, nextY);
        
-       const flags = result === 'CRITICAL' ? ['Multiple severe danger signs reported', 'Patient requires immediate medical review'] : ['Elevated symptoms detected', 'Patient requires routine medical review'];
+       const flags = concerns.length ? concerns : ['Elevated symptoms detected', 'Patient requires routine medical review'];
        nextY += 10;
        
        flags.forEach(flag => {
@@ -292,7 +373,7 @@ export default function AIReportResultScreen() {
        doc.setTextColor(2, 136, 209); // var(--info) approx
        doc.text("Recommendations for Doctor", 20, nextY);
 
-       const recs = result === 'CRITICAL' ? ['Schedule immediate physical examination', 'Cross-check latest ANC blood reports'] : ['Review patient condition within 48 hours', 'Cross-check latest ANC blood reports'];
+       const recs = recommendations.length ? recommendations : ['Review patient condition within 48 hours', 'Cross-check latest clinical reports'];
        nextY += 10;
 
        recs.forEach((rec, idx) => {
@@ -313,7 +394,7 @@ export default function AIReportResultScreen() {
 
     drawFooter(3);
 
-    doc.save(`${patient.name.replace(/\\s+/g, '_')}_HealthReport.pdf`);
+    doc.save(`${(patient?.name || 'Patient').replace(/\s+/g, '_')}_HealthReport.pdf`);
   };
 
   const { profile } = useAuth();
@@ -341,6 +422,9 @@ export default function AIReportResultScreen() {
         urgency: result,
         aiStatus: result,
         aiParagraphEnglish: aiText,
+        aiConcerns: concerns,
+        aiRecommendations: recommendations,
+        aiModel: assessment?.model || 'unknown',
         ashaName: profile?.name || 'ASHA Worker',
         phcLocation: patient.village || profile?.phc || 'PHC Ramgarh',
         createdAt: serverTimestamp()
@@ -366,7 +450,7 @@ export default function AIReportResultScreen() {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-secondary p-24">
         <div className="w-48 h-48 border-4 border-t-accent rounded-full animate-spin m-b-24" style={{ borderColor: 'var(--border)', borderTopColor: 'var(--accent)' }}></div>
-        <p className="body text-secondary">Analyzing health data...</p>
+        <p className="body text-secondary">Generating AI report...</p>
         <p className="caption text-tertiary m-t-8" style={{ textTransform: 'none' }}>This takes a few seconds</p>
       </div>
     );
@@ -437,6 +521,21 @@ export default function AIReportResultScreen() {
           <div style={{ fontSize: '15px', lineHeight: 1.7, color: 'var(--text-primary)', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', padding: '14px 16px', borderLeft: '3px solid var(--accent)' }}>
             {aiText}
           </div>
+          {normalizedQaPairs.length === 0 && (
+            <div style={{ marginTop: '10px', fontSize: '12px', color: 'var(--danger)', fontWeight: 600 }}>
+              Survey responses are missing. Please regenerate the report from the survey page.
+            </div>
+          )}
+          {analysisError && (
+            <div style={{ marginTop: '10px', fontSize: '12px', color: 'var(--warning)', fontWeight: 600 }}>
+              {analysisError}
+            </div>
+          )}
+          {assessment?.model && (
+            <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--text-tertiary)' }}>
+              Model: {assessment.model}
+            </div>
+          )}
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '12px' }}>
             <button onClick={speakText} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '100px', background: 'var(--accent-light)', border: '1px solid var(--accent)', color: 'var(--accent)', font: '13px "DM Sans", sans-serif', fontWeight: 600, cursor: 'pointer' }}>
@@ -459,10 +558,10 @@ export default function AIReportResultScreen() {
                  <span style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)' }}>Concerns Identified</span>
                </div>
                
-               {[{text: result === 'CRITICAL' ? 'Multiple severe danger signs reported' : 'Elevated symptoms detected'}, {text: 'Patient requires medical review'}].map((flag, i, arr) => (
+               {concerns.map((flag, i, arr) => (
                  <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '10px 0', borderBottom: i === arr.length - 1 ? 'none' : '1px solid var(--border-subtle)' }}>
                     <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--danger)', marginTop: '6px', flexShrink: 0 }} />
-                    <div style={{ fontSize: '14px', color: 'var(--text-primary)', lineHeight: 1.5 }}>{flag.text}</div>
+                    <div style={{ fontSize: '14px', color: 'var(--text-primary)', lineHeight: 1.5 }}>{flag}</div>
                  </div>
                ))}
             </div>
@@ -474,12 +573,12 @@ export default function AIReportResultScreen() {
                  <span style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)' }}>Recommendations for Doctor</span>
                </div>
                
-               {[{text: result === 'CRITICAL' ? 'Schedule immediate physical examination' : 'Review patient condition within 48 hours'}, {text: 'Cross-check latest ANC blood reports'}].map((rec, i, arr) => (
+               {recommendations.map((rec, i, arr) => (
                  <div key={i} style={{ display: 'flex', gap: '10px', padding: '10px 0', borderBottom: i === arr.length - 1 ? 'none' : '1px solid var(--border-subtle)' }}>
                     <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'var(--info-light)', color: 'var(--info)', font: '12px "DM Sans"', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                       {i + 1}
                     </div>
-                    <div style={{ fontSize: '14px', color: 'var(--text-primary)', lineHeight: 1.5 }}>{rec.text}</div>
+                    <div style={{ fontSize: '14px', color: 'var(--text-primary)', lineHeight: 1.5 }}>{rec}</div>
                  </div>
                ))}
             </div>
