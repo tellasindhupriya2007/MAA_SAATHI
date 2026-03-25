@@ -2,9 +2,9 @@ import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   FaHome, FaUsers, FaMapMarkedAlt, FaUser, 
-  FaBell, FaHeartbeat, FaClock, FaChartLine, 
+  FaBell, FaHeartbeat, FaChartLine, 
   FaFileMedical, FaDownload, FaPaperPlane, FaEye, 
-  FaPhone, FaMapMarkerAlt, FaCheckCircle, FaTint,
+  FaPhone, FaMapMarkerAlt, FaCheckCircle, FaTint, FaThermometerHalf,
   FaFilePdf, FaChevronRight, FaTimes, FaVial
 } from 'react-icons/fa';
 import { MdOutlineDarkMode, MdOutlineLightMode, MdNotificationsActive } from 'react-icons/md';
@@ -14,14 +14,11 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../hooks/useAuth';
 import { generateProfessionalReport } from '../../utils/generatePdfReport';
 import { AppContext } from '../../context/AppContext';
+import { useVitals } from '../../hooks/useVitals';
 
-const getRelativeTime = (timestamp) => {
-  if (!timestamp) return 'just now';
-  const mins = Math.max(0, Math.floor((Date.now() - timestamp) / 60000));
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins} min${mins === 1 ? '' : 's'} ago`;
-  const hours = Math.floor(mins / 60);
-  return `${hours} hr${hours === 1 ? '' : 's'} ago`;
+const toNumber = (value, fallback = null) => {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
 };
 
 const FamilyDashboard = () => {
@@ -29,7 +26,7 @@ const FamilyDashboard = () => {
   const { theme, toggleTheme } = useTheme();
   const { language, toggleLanguage } = useLanguage();
   const { profile } = useAuth();
-  const { patients, caretakerPatient, caretakerLive, caretakerAlerts } = React.useContext(AppContext);
+  const { patients, caretakerPatient, caretakerAlerts } = React.useContext(AppContext);
 
   const [activeTab, setActiveTab] = useState('home');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -39,6 +36,25 @@ const FamilyDashboard = () => {
   const alertsRef = useRef(null);
 
   const alerts = caretakerAlerts || [];
+  const vitalsCandidates = React.useMemo(
+    () => [caretakerPatient?.id, caretakerPatient?.authUid, profile?.linkedPatientId, 'patient_demo'],
+    [caretakerPatient?.id, caretakerPatient?.authUid, profile?.linkedPatientId]
+  );
+  const { latestVitals } = useVitals(vitalsCandidates);
+  const live = latestVitals || {};
+  const liveHr = toNumber(live.heartRate ?? live.hr ?? live.heartRateAvg, null);
+  const liveSpo2 = toNumber(live.spO2 ?? live.spo2 ?? live.spo2Avg, null);
+  const liveRoomTemp = toNumber(live.roomTemperature ?? live.roomTemp ?? live.ambientTemperature, null);
+  const liveRoomHumidity = toNumber(live.roomHumidity ?? live.humidity ?? live.relativeHumidity, null);
+  const liveBodyTemp = toNumber(live.bodyTemperature ?? live.bodyTemp ?? live.temperature ?? live.temperatureAvg, null);
+  const liveStatus =
+    liveSpo2 !== null && liveSpo2 < 93
+      ? 'critical'
+      : liveHr !== null && liveHr > 105
+        ? 'critical'
+        : (liveSpo2 !== null && liveSpo2 < 95) || (liveHr !== null && liveHr > 95)
+          ? 'attention'
+          : 'stable';
 
   const userName = profile?.name?.split(' ')[0] || 'Lakshmi';
   const initial = (profile?.name || 'Lakshmi').charAt(0);
@@ -63,9 +79,11 @@ const FamilyDashboard = () => {
   };
 
   const stats = [
-    { label: 'HEART RATE', value: `${Math.round(caretakerLive?.hr ?? 78)} bpm`, color: 'var(--danger)', icon: FaHeartbeat, iconBg: 'var(--danger-light)' },
-    { label: 'SPO2', value: `${Math.round(caretakerLive?.spo2 ?? 98)}%`, color: 'var(--info)', icon: FaTint, iconBg: 'var(--info-light)' },
-    { label: 'LAST SEEN', value: getRelativeTime(caretakerLive?.updatedAt), color: 'var(--warning)', icon: FaClock, iconBg: 'var(--warning-light)' },
+    { label: 'HEART RATE', value: liveHr !== null ? `${Math.round(liveHr)} bpm` : '--', color: 'var(--danger)', icon: FaHeartbeat, iconBg: 'var(--danger-light)' },
+    { label: 'SPO2', value: liveSpo2 !== null ? `${Math.round(liveSpo2)}%` : '--', color: 'var(--info)', icon: FaTint, iconBg: 'var(--info-light)' },
+    { label: 'ROOM TEMP', value: liveRoomTemp !== null ? `${liveRoomTemp.toFixed(1)}°C` : '--', color: '#F59E0B', icon: FaThermometerHalf, iconBg: '#FEF3C7' },
+    { label: 'ROOM HUMIDITY', value: liveRoomHumidity !== null ? `${Math.round(liveRoomHumidity)}%` : '--', color: '#0D9488', icon: FaTint, iconBg: '#CCFBF1' },
+    { label: 'BODY TEMP', value: liveBodyTemp !== null ? `${liveBodyTemp.toFixed(1)}°C` : '--', color: '#7C3AED', icon: FaVial, iconBg: '#EDE9FE' },
   ];
 
   const handleDownloadPdf = (rep) => {
@@ -267,9 +285,9 @@ const FamilyDashboard = () => {
                 </div>
              </div>
              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: caretakerLive?.status === 'critical' ? 'var(--danger)' : caretakerLive?.status === 'attention' ? 'var(--warning)' : 'var(--success)' }} />
-                <span style={{ fontSize: '14px', fontWeight: 800, color: caretakerLive?.status === 'critical' ? 'var(--danger)' : caretakerLive?.status === 'attention' ? 'var(--warning)' : 'var(--success)' }}>
-                  {caretakerLive?.status === 'critical' ? 'HEALTH CRITICAL' : caretakerLive?.status === 'attention' ? 'NEEDS ATTENTION' : 'HEALTH STABLE'}
+                <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: liveStatus === 'critical' ? 'var(--danger)' : liveStatus === 'attention' ? 'var(--warning)' : 'var(--success)' }} />
+                <span style={{ fontSize: '14px', fontWeight: 800, color: liveStatus === 'critical' ? 'var(--danger)' : liveStatus === 'attention' ? 'var(--warning)' : 'var(--success)' }}>
+                  {liveStatus === 'critical' ? 'HEALTH CRITICAL' : liveStatus === 'attention' ? 'NEEDS ATTENTION' : 'HEALTH STABLE'}
                 </span>
              </div>
              <div style={{ display: 'flex', gap: '8px' }}>

@@ -13,22 +13,6 @@ import { useTheme } from '../../context/ThemeContext';
 import { useVitals } from '../../hooks/useVitals';
 import { generateProfessionalReport } from '../../utils/generatePdfReport';
 
-const generateMockVitals = (count = 7) => {
-  const data = [];
-  const now = Date.now();
-  for (let i = 0; i < count; i++) {
-    data.push({
-      heartRate: Math.floor(Math.random() * (90 - 62 + 1)) + 62,
-      spO2: Math.floor(Math.random() * (99 - 95 + 1)) + 95,
-      bodyTemperature: Number((Math.random() * (37.1 - 36.3) + 36.3).toFixed(1)),
-      roomTemperature: Number((Math.random() * (31 - 23) + 23).toFixed(1)),
-      roomHumidity: Math.floor(Math.random() * (70 - 40 + 1)) + 40,
-      timestamp: { seconds: Math.floor((now - i * 24 * 60 * 60 * 1000) / 1000) }
-    });
-  }
-  return data;
-};
-
 const toNumber = (value, fallback) => {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
@@ -36,19 +20,23 @@ const toNumber = (value, fallback) => {
 
 const normalizeVitalsEntry = (entry = {}) => {
   const bodyTemperature = toNumber(
-    entry.bodyTemperature ?? entry.temperature ?? entry.temperatureAvg,
-    36.6
+    entry.bodyTemperature ?? entry.bodyTemp ?? entry.temperature ?? entry.temperatureAvg,
+    null
   );
 
   return {
     ...entry,
-    heartRate: toNumber(entry.heartRate ?? entry.heartRateAvg, 72),
-    spO2: toNumber(entry.spO2 ?? entry.spo2 ?? entry.spo2Avg, 98),
+    heartRate: toNumber(entry.heartRate ?? entry.hr ?? entry.heartRateAvg, null),
+    spO2: toNumber(entry.spO2 ?? entry.spo2 ?? entry.spo2Avg, null),
     bodyTemperature,
-    roomTemperature: toNumber(entry.roomTemperature ?? entry.roomTemp ?? entry.ambientTemperature, 25.2),
-    roomHumidity: toNumber(entry.roomHumidity ?? entry.humidity ?? entry.relativeHumidity, 52)
+    roomTemperature: toNumber(entry.roomTemperature ?? entry.roomTemp ?? entry.ambientTemperature, null),
+    roomHumidity: toNumber(entry.roomHumidity ?? entry.humidity ?? entry.relativeHumidity, null),
+    battery: toNumber(entry.battery ?? entry.batteryLevel, null)
   };
 };
+
+const formatVital = (value, digits = 0) =>
+  Number.isFinite(value) ? Number(value).toFixed(digits) : '--';
 
 const WellnessDashboard = () => {
   const navigate = useNavigate();
@@ -64,9 +52,13 @@ const WellnessDashboard = () => {
   }, [profile, navigate]);
 
   const name = (profile?.name || 'User').split(' ')[0];
-  const { vitals: firestoreVitals, latestVitals: firestoreLatest } = useVitals(profile?.uid);
+  const vitalsCandidates = React.useMemo(
+    () => [profile?.patientId, profile?.uid, 'patient_demo'],
+    [profile?.patientId, profile?.uid]
+  );
+  const { vitals: firestoreVitals, latestVitals: firestoreLatest } = useVitals(vitalsCandidates);
 
-  const rawVitals = firestoreVitals && firestoreVitals.length > 0 ? firestoreVitals : generateMockVitals(7);
+  const rawVitals = firestoreVitals && firestoreVitals.length > 0 ? firestoreVitals : [];
   const displayVitals = rawVitals.map(normalizeVitalsEntry);
   const latest = normalizeVitalsEntry(firestoreLatest || rawVitals[0] || {});
   const currentHr = latest.heartRate;
@@ -74,6 +66,8 @@ const WellnessDashboard = () => {
   const currentBodyTemp = latest.bodyTemperature;
   const currentRoomTemp = latest.roomTemperature;
   const currentRoomHumidity = latest.roomHumidity;
+  const ringConnected = displayVitals.length > 0;
+  const liveBattery = toNumber(latest.battery ?? latest.batteryLevel, null);
 
   const generatePDF = async (type = 'instant', mode = 'download') => {
     setIsGenerating(true);
@@ -89,7 +83,7 @@ const WellnessDashboard = () => {
   const t = {
     en: {
       subtitle: 'Achieve your health goals',
-      vitals: 'My Health Indicators', ring: 'Ring Connected',
+      vitals: 'My Health Indicators', ring: 'Ring Connected', ringOff: 'Ring not connected',
       hr: 'HEART RATE', spo2: 'OXYGEN (SPO2)',
       roomTemp: 'ROOM TEMP', roomHumidity: 'ROOM HUMIDITY', bodyTemp: 'BODY TEMP',
       analytics: 'Vital Trends (7 Days)',
@@ -97,7 +91,7 @@ const WellnessDashboard = () => {
     },
     te: {
       subtitle: 'మీ ఆరోగ్య లక్ష్యాలను చేరుకోండి',
-      vitals: 'నా ఆరోగ్య సూచికలు', ring: 'రింగ్ కనెక్ట్ చేయబడింది',
+      vitals: 'నా ఆరోగ్య సూచికలు', ring: 'రింగ్ కనెక్ట్ చేయబడింది', ringOff: 'రింగ్ కనెక్ట్ కాలేదు',
       hr: 'హృదయ స్పందన', spo2: 'ఆక్సిజన్ (SPO2)',
       roomTemp: 'గది ఉష్ణోగ్రత', roomHumidity: 'గది ఆర్ద్రత', bodyTemp: 'శరీర ఉష్ణోగ్రత',
       analytics: '7 రోజుల వైటల్ ట్రెండ్స్',
@@ -107,7 +101,12 @@ const WellnessDashboard = () => {
   const text = t[language] || t.en;
 
   const chartData = [...displayVitals].slice(0, 7).reverse().map(v => {
-    const ts = v.timestamp?.seconds ? new Date(v.timestamp.seconds * 1000) : new Date(v.timestamp);
+    const ts = v.timestamp?.seconds
+      ? new Date(v.timestamp.seconds * 1000)
+      : v.timestampMs
+        ? new Date(v.timestampMs)
+        : null;
+    if (!ts || Number.isNaN(ts.getTime())) return null;
     return {
       day: ts.toLocaleDateString('en-US', { weekday: 'short' }),
       hr: v.heartRate,
@@ -116,14 +115,14 @@ const WellnessDashboard = () => {
       humidity: v.roomHumidity,
       bodyTemp: v.bodyTemperature
     };
-  });
+  }).filter(Boolean);
 
   const vitalCards = [
-    { icon: FaHeartbeat, label: text.hr, value: currentHr.toFixed(0), unit: 'bpm', color: 'var(--danger)', bg: 'var(--danger-light)' },
-    { icon: FaLungs, label: text.spo2, value: currentSpo2.toFixed(0), unit: '%', color: 'var(--info)', bg: 'var(--info-light)' },
-    { icon: FaThermometerHalf, label: text.roomTemp, value: currentRoomTemp.toFixed(1), unit: '°C', color: '#F59E0B', bg: '#FEF3C7' },
-    { icon: FaTint, label: text.roomHumidity, value: currentRoomHumidity.toFixed(0), unit: '%', color: '#0D9488', bg: '#CCFBF1' },
-    { icon: FaThermometerHalf, label: text.bodyTemp, value: currentBodyTemp.toFixed(1), unit: '°C', color: '#7C3AED', bg: '#EDE9FE' }
+    { icon: FaHeartbeat, label: text.hr, value: formatVital(currentHr, 0), unit: 'bpm', color: 'var(--danger)', bg: 'var(--danger-light)' },
+    { icon: FaLungs, label: text.spo2, value: formatVital(currentSpo2, 0), unit: '%', color: 'var(--info)', bg: 'var(--info-light)' },
+    { icon: FaThermometerHalf, label: text.roomTemp, value: formatVital(currentRoomTemp, 1), unit: '°C', color: '#F59E0B', bg: '#FEF3C7' },
+    { icon: FaTint, label: text.roomHumidity, value: formatVital(currentRoomHumidity, 0), unit: '%', color: '#0D9488', bg: '#CCFBF1' },
+    { icon: FaThermometerHalf, label: text.bodyTemp, value: formatVital(currentBodyTemp, 1), unit: '°C', color: '#7C3AED', bg: '#EDE9FE' }
   ];
 
   return (
@@ -146,12 +145,16 @@ const WellnessDashboard = () => {
         </div>
       </header>
 
-      <div className="responsive-mx responsive-p" style={{ marginTop: '16px', padding: '12px 20px', background: 'var(--surface)', border: '1.5px solid var(--success-light)', borderRadius: 'var(--radius-lg)', display: 'flex', alignItems: 'center', gap: '12px', boxShadow: 'var(--shadow-sm)' }}>
-        <FaBroadcastTower color="var(--success)" className="animate-pulse" />
-        <span style={{ fontWeight: 600, color: 'var(--success)', flex: 1 }}>{text.ring}</span>
+      <div className="responsive-mx responsive-p" style={{ marginTop: '16px', padding: '12px 20px', background: 'var(--surface)', border: `1.5px solid ${ringConnected ? 'var(--success-light)' : 'var(--border)'}`, borderRadius: 'var(--radius-lg)', display: 'flex', alignItems: 'center', gap: '12px', boxShadow: 'var(--shadow-sm)' }}>
+        <FaBroadcastTower color={ringConnected ? 'var(--success)' : 'var(--text-tertiary)'} className={ringConnected ? 'animate-pulse' : ''} />
+        <span style={{ fontWeight: 600, color: ringConnected ? 'var(--success)' : 'var(--text-tertiary)', flex: 1 }}>
+          {ringConnected ? text.ring : text.ringOff}
+        </span>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-           <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--success)' }}>84%</span>
-           <FaBatteryThreeQuarters color="var(--success)" size={16} />
+           <span style={{ fontSize: '12px', fontWeight: 700, color: ringConnected ? 'var(--success)' : 'var(--text-tertiary)' }}>
+             {liveBattery !== null ? `${Math.round(liveBattery)}%` : 'N/A'}
+           </span>
+           <FaBatteryThreeQuarters color={ringConnected ? 'var(--success)' : 'var(--text-tertiary)'} size={16} />
         </div>
       </div>
 

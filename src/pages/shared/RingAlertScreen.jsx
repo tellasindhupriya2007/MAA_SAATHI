@@ -1,20 +1,74 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { FaBell, FaPhone, FaCheck, FaMapMarkerAlt, FaHeartbeat, FaCheckCircle } from 'react-icons/fa';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { FaBell, FaPhone, FaCheck, FaMapMarkerAlt, FaHeartbeat, FaCheckCircle, FaLungs, FaThermometerHalf, FaTint } from 'react-icons/fa';
+import { useVitals } from '../../hooks/useVitals';
 
 const RingAlertScreen = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [resolved, setResolved] = useState(false);
 
-  // Mock Alert payload
+  const stateAlert = location.state?.alert || {};
   const alertPayload = {
-    patientName: 'Sunita Devi',
-    trigger: 'Ring SOS pressed',
-    age: 24,
-    status: '28 Weeks Pregnant',
-    address: 'House 42, Ramgarh',
-    vitals: { hr: '110 bpm', spo2: '96%' }
+    patientName: stateAlert.patientName || stateAlert.name || 'Patient',
+    trigger: stateAlert.trigger || stateAlert.message || 'Ring SOS pressed',
+    age: Number(stateAlert.age) || 0,
+    status: stateAlert.status || stateAlert.stage || 'Live monitoring',
+    address: stateAlert.address || stateAlert.location || 'Unknown location',
+    patientId: stateAlert.patientId || stateAlert.uid || 'patient_demo'
   };
+  const { latestVitals } = useVitals([alertPayload.patientId, 'patient_demo']);
+  const current = latestVitals || {};
+
+  const toNumber = (value, fallback = null) => {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+  };
+
+  const formattedVitals = [
+    {
+      key: 'hr',
+      label: 'HEART RATE',
+      value: toNumber(current.heartRate ?? current.hr ?? current.heartRateAvg, null),
+      unit: 'bpm',
+      color: 'var(--danger)',
+      icon: FaHeartbeat
+    },
+    {
+      key: 'spo2',
+      label: 'OXYGEN',
+      value: toNumber(current.spO2 ?? current.spo2 ?? current.spo2Avg, null),
+      unit: '%',
+      color: 'var(--info)',
+      icon: FaLungs
+    },
+    {
+      key: 'roomTemp',
+      label: 'ROOM TEMP',
+      value: toNumber(current.roomTemperature ?? current.roomTemp ?? current.ambientTemperature, null),
+      unit: '°C',
+      digits: 1,
+      color: '#F59E0B',
+      icon: FaThermometerHalf
+    },
+    {
+      key: 'roomHumidity',
+      label: 'HUMIDITY',
+      value: toNumber(current.roomHumidity ?? current.humidity ?? current.relativeHumidity, null),
+      unit: '%',
+      color: '#0D9488',
+      icon: FaTint
+    },
+    {
+      key: 'bodyTemp',
+      label: 'BODY TEMP',
+      value: toNumber(current.bodyTemperature ?? current.bodyTemp ?? current.temperature ?? current.temperatureAvg, null),
+      unit: '°C',
+      digits: 1,
+      color: '#7C3AED',
+      icon: FaThermometerHalf
+    }
+  ];
 
   if (resolved) {
     return (
@@ -105,7 +159,7 @@ const RingAlertScreen = () => {
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{alertPayload.patientName}</div>
-          <div style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '6px' }}>{alertPayload.age} yrs • {alertPayload.status}</div>
+          <div style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '6px' }}>{alertPayload.age || '--'} yrs • {alertPayload.status}</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
              <FaMapMarkerAlt size={13} color="var(--accent)" />
              <span style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>{alertPayload.address}</span>
@@ -129,14 +183,19 @@ const RingAlertScreen = () => {
            <div style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>From ring sensor</div>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '16px' }}>
-           <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', padding: '14px 16px' }}>
-              <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--text-tertiary)', marginBottom: '4px' }}>HEART RATE</div>
-              <div style={{ fontSize: '24px', fontWeight: 700, color: 'var(--danger)' }}>{alertPayload.vitals.hr}</div>
-           </div>
-           <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', padding: '14px 16px' }}>
-              <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--text-tertiary)', marginBottom: '4px' }}>OXYGEN</div>
-              <div style={{ fontSize: '24px', fontWeight: 700, color: 'var(--info)' }}>{alertPayload.vitals.spo2}</div>
-           </div>
+           {formattedVitals.map((vital) => (
+             <div key={vital.key} style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', padding: '14px 16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                  <vital.icon size={12} color={vital.color} />
+                  <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--text-tertiary)' }}>{vital.label}</div>
+                </div>
+                <div style={{ fontSize: '24px', fontWeight: 700, color: vital.color }}>
+                  {vital.value !== null
+                    ? `${vital.digits !== undefined ? vital.value.toFixed(vital.digits) : Math.round(vital.value)}${vital.unit}`
+                    : '--'}
+                </div>
+             </div>
+           ))}
         </div>
       </div>
 

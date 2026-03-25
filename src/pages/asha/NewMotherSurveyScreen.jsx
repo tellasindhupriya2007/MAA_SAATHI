@@ -181,7 +181,27 @@ const NewMotherSurveyScreen = () => {
     });
     setOtherErrors(newErrors);
     if (hasError) return;
-    navigate('/shared/ai-report', { state: { answers, patient } });
+
+    const qaPairs = allQ.map((q, index) => {
+      const selected = answers[q.id];
+      const options = language === 'te' ? q.options_te : q.options_en;
+      const questionText = language === 'te' ? q.te : q.en;
+      let answerText = 'Not answered';
+
+      if (selected === OTHER_IDX) {
+        answerText = (otherText[q.id] || '').trim() || 'Not answered';
+      } else if (selected !== undefined && options[selected] !== undefined) {
+        answerText = options[selected];
+      }
+
+      return {
+        id: q.id || `q${index + 1}`,
+        question: questionText,
+        answer: answerText
+      };
+    });
+
+    navigate('/shared/ai-report', { state: { answers, qaPairs, patient } });
   };
 
   const renderQuestionCard = (q, indexOffset) => {

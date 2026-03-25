@@ -221,6 +221,11 @@ const ElderlyHealthSurvey = () => {
           state: { 
             answers, 
             questions: t.questions,
+            qaPairs: profileAnswers.map((item) => ({
+              id: item.id,
+              question: item.question,
+              answer: item.answer
+            })),
             isGuest: true,
             patient: { name: 'Guest User', age: answers.age || '60+' }
           } 

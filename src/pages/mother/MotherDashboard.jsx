@@ -26,24 +26,6 @@ const REPORTS = [
   { id: 'r2', type: 'Antenatal Checkup', date: '01 Feb 2026', urgency: 'MODERATE' },
 ];
 
-const RING_CONNECTED = true;
-
-const generateMockVitals = (count = 7) => {
-  const data = [];
-  const now = Date.now();
-  for (let i = 0; i < count; i++) {
-    data.push({
-      heartRate: Math.floor(Math.random() * (88 - 64 + 1)) + 64,
-      spO2: Math.floor(Math.random() * (99 - 95 + 1)) + 95,
-      bodyTemperature: Number((Math.random() * (37.1 - 36.4) + 36.4).toFixed(1)),
-      roomTemperature: Number((Math.random() * (30 - 23) + 23).toFixed(1)),
-      roomHumidity: Math.floor(Math.random() * (68 - 40 + 1)) + 40,
-      timestamp: { seconds: Math.floor((now - i * 24 * 60 * 60 * 1000) / 1000) }
-    });
-  }
-  return data;
-};
-
 const toNumber = (value, fallback) => {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
@@ -51,19 +33,40 @@ const toNumber = (value, fallback) => {
 
 const normalizeVitalsEntry = (entry = {}) => {
   const bodyTemperature = toNumber(
-    entry.bodyTemperature ?? entry.temperature ?? entry.temperatureAvg,
-    36.6
+    entry.bodyTemperature ?? entry.bodyTemp ?? entry.temperature ?? entry.temperatureAvg,
+    null
   );
 
   return {
     ...entry,
-    heartRate: toNumber(entry.heartRate ?? entry.heartRateAvg, 72),
-    spO2: toNumber(entry.spO2 ?? entry.spo2 ?? entry.spo2Avg, 98),
+    heartRate: toNumber(entry.heartRate ?? entry.hr ?? entry.heartRateAvg, null),
+    spO2: toNumber(entry.spO2 ?? entry.spo2 ?? entry.spo2Avg, null),
     bodyTemperature,
-    roomTemperature: toNumber(entry.roomTemperature ?? entry.roomTemp ?? entry.ambientTemperature, 25.0),
-    roomHumidity: toNumber(entry.roomHumidity ?? entry.humidity ?? entry.relativeHumidity, 52)
+    roomTemperature: toNumber(entry.roomTemperature ?? entry.roomTemp ?? entry.ambientTemperature, null),
+    roomHumidity: toNumber(entry.roomHumidity ?? entry.humidity ?? entry.relativeHumidity, null),
+    battery: toNumber(entry.battery ?? entry.batteryLevel, null)
   };
 };
+
+const getRelativeTime = (value) => {
+  const ts =
+    typeof value?.toMillis === 'function'
+      ? value.toMillis()
+      : typeof value?.seconds === 'number'
+        ? value.seconds * 1000
+        : Number(value);
+
+  if (!Number.isFinite(ts)) return 'No live vitals yet';
+  const diffMs = Math.max(0, Date.now() - ts);
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return 'Updated just now';
+  if (mins < 60) return `Updated ${mins} min${mins === 1 ? '' : 's'} ago`;
+  const hrs = Math.floor(mins / 60);
+  return `Updated ${hrs} hr${hrs === 1 ? '' : 's'} ago`;
+};
+
+const formatVital = (value, digits = 0) =>
+  Number.isFinite(value) ? Number(value).toFixed(digits) : '--';
 
 const urgencyColors = {
   STABLE:   { bg: 'var(--success-light)', color: 'var(--success)', icon: 'var(--success)' },
@@ -89,7 +92,11 @@ const MotherDashboard = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [reportGenerated, setReportGenerated] = useState(false);
   const [isSending, setIsSending] = useState(false);
-  const { vitals, latestVitals } = useVitals(profile?.uid);
+  const vitalsCandidates = React.useMemo(
+    () => [profile?.patientId, profile?.uid, 'patient_demo'],
+    [profile?.patientId, profile?.uid]
+  );
+  const { vitals, latestVitals } = useVitals(vitalsCandidates);
   const { surveys } = useSurveys(profile?.uid);
   const [toast, setToast] = useState('');
 
@@ -111,9 +118,11 @@ const MotherDashboard = () => {
     return fireReports.length === 0 ? REPORTS : fireReports;
   }, [firestoreReports, latestSurvey]);
 
-  const rawVitals = vitals && vitals.length > 0 ? vitals : generateMockVitals(7);
+  const rawVitals = vitals && vitals.length > 0 ? vitals : [];
   const displayVitals = rawVitals.map(normalizeVitalsEntry);
   const latest = normalizeVitalsEntry(latestVitals || rawVitals[0] || {});
+  const ringConnected = displayVitals.length > 0;
+  const batteryPct = Number.isFinite(latest.battery) ? Math.round(latest.battery) : null;
 
   const currentHr = latest.heartRate;
   const currentSpo2 = latest.spO2;
@@ -132,8 +141,7 @@ const MotherDashboard = () => {
     }, 5000);
 
     try {
-      // Use displayVitals if real vitals are empty to ensure a good-looking report
-      const vitalsToUse = (vitals && vitals.length > 0) ? vitals : rawVitals;
+      const vitalsToUse = vitals || [];
       
       if (type === 'instant') {
         generateInstantReport(profile, vitalsToUse, latestSurvey, mode);
@@ -210,7 +218,7 @@ const MotherDashboard = () => {
   const t = {
     en: {
       subtitle: 'Your health, monitored daily',
-      vitals: 'My Vitals Today', updated: 'Last updated 10 mins ago',
+      vitals: 'My Vitals Today',
       hr: 'HEART RATE', spo2: 'BLOOD OXYGEN',
       roomTemp: 'ROOM TEMP', roomHumidity: 'ROOM HUMIDITY', bodyTemp: 'BODY TEMP',
       analytics: 'Vital Trends (7 Days)',
@@ -220,13 +228,13 @@ const MotherDashboard = () => {
       bpmLabel: 'BPM Over 7 Days', bpmToday: `${currentHr} bpm today`,
       reports: 'Health Reports',
       worker: 'My Health Worker', visited: 'Last visited 2 days ago',
-      ring: 'Ring Connected', ringOff: 'Ring not connected', battery: 'Battery 82%',
+      ring: 'Ring Connected', ringOff: 'Ring not connected',
       connected: 'CONNECTED', view: 'View PDF', download: 'Download PDF',
       monthly: 'Download Monthly Report'
     },
     te: {
       subtitle: 'మీ ఆరోగ్యం, ప్రతిరోజూ పర్యవేక్షించబడుతుంది',
-      vitals: 'ఈ రోజు నా ప్రాణాధారాలు', updated: '10 నిమిషాల క్రితం నవీకరించబడింది',
+      vitals: 'ఈ రోజు నా ప్రాణాధారాలు',
       hr: 'హృదయ స్పందన', spo2: 'రక్తంలో ఆక్సిజన్',
       roomTemp: 'గది ఉష్ణోగ్రత', roomHumidity: 'గది ఆర్ద్రత', bodyTemp: 'శరీర ఉష్ణోగ్రత',
       analytics: '7 రోజుల వైటల్ ట్రెండ్స్',
@@ -236,7 +244,7 @@ const MotherDashboard = () => {
       bpmLabel: '7 రోజులు BPM', bpmToday: `${currentHr} bpm ఈరోజు`,
       reports: 'ఆరోగ్య నివేదికలు',
       worker: 'నా ఆరోగ్య కార్యకర్త', visited: '2 రోజుల క్రితం సందర్శించారు',
-      ring: 'రింగ్ కనెక్ట్ చేయబడింది', ringOff: 'రింగ్ కనెక్ట్ కాలేదు', battery: 'బ్యాటరీ 82%',
+      ring: 'రింగ్ కనెక్ట్ చేయబడింది', ringOff: 'రింగ్ కనెక్ట్ కాలేదు',
       connected: 'కనెక్ట్ అయింది', view: 'నివేదిక చూడండి', download: 'డౌన్‌లోడ్ PDF',
       monthly: 'నెలవారీ నివేదిక డౌన్‌లోడ్'
     }
@@ -249,7 +257,12 @@ const MotherDashboard = () => {
   };
 
   const chartData = [...displayVitals].slice(0, 7).reverse().map((v) => {
-    const ts = v.timestamp?.seconds ? new Date(v.timestamp.seconds * 1000) : new Date(v.timestamp);
+    const ts = v.timestamp?.seconds
+      ? new Date(v.timestamp.seconds * 1000)
+      : v.timestampMs
+        ? new Date(v.timestampMs)
+        : null;
+    if (!ts || Number.isNaN(ts.getTime())) return null;
     return {
       day: ts.toLocaleDateString('en-US', { weekday: 'short' }),
       hr: v.heartRate,
@@ -258,14 +271,14 @@ const MotherDashboard = () => {
       humidity: v.roomHumidity,
       bodyTemp: v.bodyTemperature
     };
-  });
+  }).filter(Boolean);
 
   const vitalCards = [
-    { icon: FaHeartbeat, label: text.hr, value: currentHr.toFixed(0), unit: 'bpm', color: 'var(--danger)', bg: 'var(--danger-light)' },
-    { icon: FaLungs, label: text.spo2, value: currentSpo2.toFixed(0), unit: '%', color: 'var(--info)', bg: 'var(--info-light)' },
-    { icon: FaThermometerHalf, label: text.roomTemp, value: currentRoomTemp.toFixed(1), unit: '°C', color: '#F59E0B', bg: '#FEF3C7' },
-    { icon: FaTint, label: text.roomHumidity, value: currentRoomHumidity.toFixed(0), unit: '%', color: '#0D9488', bg: '#CCFBF1' },
-    { icon: FaThermometerHalf, label: text.bodyTemp, value: currentBodyTemp.toFixed(1), unit: '°C', color: '#7C3AED', bg: '#EDE9FE' }
+    { icon: FaHeartbeat, label: text.hr, value: formatVital(currentHr, 0), unit: 'bpm', color: 'var(--danger)', bg: 'var(--danger-light)' },
+    { icon: FaLungs, label: text.spo2, value: formatVital(currentSpo2, 0), unit: '%', color: 'var(--info)', bg: 'var(--info-light)' },
+    { icon: FaThermometerHalf, label: text.roomTemp, value: formatVital(currentRoomTemp, 1), unit: '°C', color: '#F59E0B', bg: '#FEF3C7' },
+    { icon: FaTint, label: text.roomHumidity, value: formatVital(currentRoomHumidity, 0), unit: '%', color: '#0D9488', bg: '#CCFBF1' },
+    { icon: FaThermometerHalf, label: text.bodyTemp, value: formatVital(currentBodyTemp, 1), unit: '°C', color: '#7C3AED', bg: '#EDE9FE' }
   ];
 
   return (
@@ -341,20 +354,22 @@ const MotherDashboard = () => {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between' 
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ width: '44px', height: '44px', borderRadius: '50%', flexShrink: 0, background: RING_CONNECTED ? 'var(--success-light)' : 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <FaBroadcastTower size={20} color={RING_CONNECTED ? 'var(--success)' : 'var(--text-tertiary)'} />
+          <div style={{ width: '44px', height: '44px', borderRadius: '50%', flexShrink: 0, background: ringConnected ? 'var(--success-light)' : 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <FaBroadcastTower size={20} color={ringConnected ? 'var(--success)' : 'var(--text-tertiary)'} />
           </div>
           <div>
-            <div style={{ fontSize: '15px', fontWeight: 600, color: RING_CONNECTED ? 'var(--success)' : 'var(--text-tertiary)' }}> {RING_CONNECTED ? text.ring : text.ringOff} </div>
-            {RING_CONNECTED && (
+            <div style={{ fontSize: '15px', fontWeight: 600, color: ringConnected ? 'var(--success)' : 'var(--text-tertiary)' }}> {ringConnected ? text.ring : text.ringOff} </div>
+            {ringConnected && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
                 <FaBatteryThreeQuarters size={14} color="var(--success)" />
-                <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{text.battery}</span>
+                <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                  {batteryPct !== null ? `Battery ${batteryPct}%` : 'Battery N/A'}
+                </span>
               </div>
             )}
           </div>
         </div>
-        {RING_CONNECTED && (
+        {ringConnected && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '5px', background: 'var(--success-light)', border: '1px solid var(--success)', borderRadius: '100px', padding: '4px 12px' }}>
             <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--success)', display: 'inline-block', animation: 'connectedPulse 2s infinite' }} />
             <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--success)', letterSpacing: '0.5px' }}>{text.connected}</span>
@@ -368,7 +383,9 @@ const MotherDashboard = () => {
             <FaHeartbeat size={18} color="var(--danger)" />
             <span style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)' }}>{text.vitals}</span>
           </div>
-          <span style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>{text.updated}</span>
+          <span style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
+            {getRelativeTime(latest.timestamp ?? latest.timestampMs)}
+          </span>
         </div>
         <div className="vitals-grid">
           {vitalCards.map((item) => (

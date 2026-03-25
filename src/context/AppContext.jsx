@@ -11,8 +11,6 @@ const toInitials = (name = 'UN') =>
     .toUpperCase()
     .slice(0, 2);
 
-const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
-
 const buildLocation = (house = '', village = '') => {
   const h = String(house || '').trim();
   const v = String(village || '').trim();
@@ -76,12 +74,11 @@ const formatPatientRecord = (incoming = {}, previous = {}) => {
   const house = String(merged.house || merged.houseNumber || previous.house || '').trim();
   const village = String(merged.village || previous.village || '').trim();
   const risk = normalizeRisk(merged.risk || previous.risk || 'LOW');
-  const baseSteps = Number(merged.steps || previous.steps || 1200);
 
   const vitals = {
-    hr: String(merged?.vitals?.hr || previous?.vitals?.hr || '82 bpm'),
-    spo2: String(merged?.vitals?.spo2 || previous?.vitals?.spo2 || '98%'),
-    steps: String(merged?.vitals?.steps || previous?.vitals?.steps || baseSteps.toLocaleString())
+    hr: String(merged?.vitals?.hr || previous?.vitals?.hr || '--'),
+    spo2: String(merged?.vitals?.spo2 || previous?.vitals?.spo2 || '--'),
+    steps: String(merged?.vitals?.steps || previous?.vitals?.steps || '--')
   };
 
   return {
@@ -254,20 +251,8 @@ export const AppProvider = ({ children }) => {
     setCurrentUser(prev => ({ ...prev, ...updates }));
   };
 
-  // ── Caretaker linked patient + real-time mock vitals/alerts ──────────────
+  // ── Caretaker linked patient state ────────────────────────────────────────
   const [caretakerPatientId, setCaretakerPatientId] = useState(null);
-  const [caretakerLive, setCaretakerLive] = useState({
-    hr: 78,
-    spo2: 98,
-    steps: 1240,
-    roomTemp: 26.0,
-    bodyTemp: 36.7,
-    humidity: 54,
-    battery: 84,
-    status: 'stable',
-    updatedAt: Date.now()
-  });
-  const [caretakerTrend, setCaretakerTrend] = useState([]);
   const [caretakerAlerts, setCaretakerAlerts] = useState([]);
 
   const caretakerPatient = patients.find((p) => p.id === caretakerPatientId) || null;
@@ -284,106 +269,10 @@ export const AppProvider = ({ children }) => {
 
   useEffect(() => {
     if (!caretakerPatient) {
-      setCaretakerTrend([]);
       setCaretakerAlerts([]);
       return;
     }
-
-    const now = Date.now();
-    const seedHr = clamp(76 + Math.floor(Math.random() * 8), 62, 105);
-    const seedSpo2 = clamp(97 + Math.floor(Math.random() * 3), 88, 100);
-    const seedSteps = clamp(Number(caretakerPatient?.vitals?.steps?.replace(/,/g, '') || 1200), 300, 25000);
-
-    const initialLive = {
-      hr: seedHr,
-      spo2: seedSpo2,
-      steps: seedSteps,
-      roomTemp: Number((25 + Math.random() * 4).toFixed(1)),
-      bodyTemp: Number((36.5 + Math.random() * 0.6).toFixed(1)),
-      humidity: clamp(48 + Math.floor(Math.random() * 12), 30, 90),
-      battery: clamp(74 + Math.floor(Math.random() * 16), 20, 100),
-      status: 'stable',
-      updatedAt: now
-    };
-
-    setCaretakerLive(initialLive);
-    setCaretakerTrend(
-      Array.from({ length: 7 }).map((_, idx) => {
-        const ts = now - (6 - idx) * 60 * 60 * 1000;
-        return {
-          timestamp: ts,
-          label: new Date(ts).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
-          hr: clamp(seedHr + Math.floor(Math.random() * 6) - 3, 62, 110),
-          spo2: clamp(seedSpo2 + Math.floor(Math.random() * 3) - 1, 88, 100)
-        };
-      })
-    );
     setCaretakerAlerts(createSeedAlerts(caretakerPatient.name, caretakerPatient.location));
-  }, [caretakerPatient?.id]);
-
-  useEffect(() => {
-    if (!caretakerPatient) return;
-
-    const interval = setInterval(() => {
-      setCaretakerLive((prev) => {
-        const next = {
-          hr: clamp(prev.hr + Math.floor(Math.random() * 7) - 3, 60, 115),
-          spo2: clamp(prev.spo2 + Math.floor(Math.random() * 3) - 1, 88, 100),
-          steps: clamp(prev.steps + Math.floor(Math.random() * 110), 300, 30000),
-          roomTemp: Number(clamp(prev.roomTemp + (Math.random() - 0.5) * 0.8, 18, 38).toFixed(1)),
-          bodyTemp: Number(clamp(prev.bodyTemp + (Math.random() - 0.5) * 0.2, 35.8, 39.0).toFixed(1)),
-          humidity: Math.round(clamp(prev.humidity + (Math.random() - 0.5) * 4, 30, 90)),
-          battery: clamp(prev.battery - (Math.random() > 0.7 ? 1 : 0), 5, 100),
-          status: prev.status,
-          updatedAt: Date.now()
-        };
-
-        if (next.spo2 < 93 || next.hr > 105) next.status = 'critical';
-        else if (next.spo2 < 95 || next.hr > 95) next.status = 'attention';
-        else next.status = 'stable';
-
-        setCaretakerTrend((old) => [
-          ...old.slice(-6),
-          {
-            timestamp: next.updatedAt,
-            label: new Date(next.updatedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
-            hr: next.hr,
-            spo2: next.spo2
-          }
-        ]);
-
-        setCaretakerAlerts((old) => {
-          const resolved = old.filter((a) => a.status !== 'Active');
-
-          if (next.status === 'critical') {
-            const type = next.spo2 < 93 ? 'Low SpO2' : 'High Heart Rate';
-            const trigger = next.spo2 < 93
-              ? `SpO2 dropped to ${next.spo2}%`
-              : `Heart rate spiked to ${next.hr} bpm`;
-
-            return [
-              {
-                id: 'live-critical',
-                patient: caretakerPatient.name,
-                type,
-                trigger,
-                location: caretakerPatient.location,
-                time: 'Just now',
-                status: 'Active',
-                color: 'var(--danger)'
-              },
-              ...resolved
-            ].slice(0, 6);
-          }
-
-          return resolved.slice(0, 6);
-        });
-
-        return next;
-      });
-    }, 6000);
-
-    return () => clearInterval(interval);
   }, [caretakerPatient?.id]);
 
   return (
@@ -396,8 +285,6 @@ export const AppProvider = ({ children }) => {
       caretakerPatient,
       caretakerPatientId,
       setCaretakerPatientId,
-      caretakerLive,
-      caretakerTrend,
       caretakerAlerts
     }}>
       {children}

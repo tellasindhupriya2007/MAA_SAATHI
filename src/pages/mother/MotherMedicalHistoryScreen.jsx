@@ -272,11 +272,26 @@ export default function MotherMedicalHistoryScreen() {
           text: language === 'te' ? q.te : q.en,
           options: language === 'te' ? q.options_te : q.options_en
         }));
+        const qaPairs = QUESTIONS.map((q) => {
+          const selected = answers[q.id];
+          const questionText = language === 'te' ? q.te : q.en;
+          const options = language === 'te' ? q.options_te : q.options_en;
+          let answerText = 'Not answered';
+
+          if (selected === OTHER_IDX) {
+            answerText = (otherText[q.id] || '').trim() || 'Not answered';
+          } else if (selected !== undefined && options[selected] !== undefined) {
+            answerText = options[selected];
+          }
+
+          return { id: q.id, question: questionText, answer: answerText };
+        });
         
         navigate('/shared/ai-report', {
           state: {
             questions: guestQuestions,
             answers,
+            qaPairs,
             isGuest: true,
             patient: { name: 'Guest User', age: 'N/A' }
           }
