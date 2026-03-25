@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useContext, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FaFilePdf, FaCheckCircle, FaSearch, FaEye,
@@ -11,6 +11,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../context/ThemeContext';
 import { useAlerts } from '../../hooks/useAlerts';
 import { generateProfessionalReport } from '../../utils/generatePdfReport';
+import { AppContext } from '../../context/AppContext';
 
 const themeColors = {
   bg: '#f8f9fa',
@@ -35,20 +36,55 @@ const alertStyles = {
   abnormalVitals: { accent: themeColors.danger, bg: '#fff0f0' }
 };
 
+const withUnit = (value, unit = '') => {
+  if (value === undefined || value === null || value === '') return 'N/A';
+  if (typeof value === 'number') return `${value}${unit}`;
+  const raw = String(value).trim();
+  if (!raw) return 'N/A';
+  if (/^-?\d+(\.\d+)?$/.test(raw)) return `${raw}${unit}`;
+  return raw;
+};
+
+const toDoctorPatientType = (type = '') => {
+  if (type === 'elderly') return 'elderly';
+  if (type === 'wellness') return 'wellness';
+  if (type === 'pregnant' || type === 'newMother' || type === 'mother') return 'pregnant';
+  return 'wellness';
+};
+
+const toDoctorUrgency = (risk = '') => {
+  const normalized = String(risk || '').toUpperCase();
+  if (normalized === 'HIGH' || normalized === 'CRITICAL') return 'CRITICAL';
+  if (normalized === 'MED' || normalized === 'MODERATE') return 'MODERATE';
+  return 'STABLE';
+};
+
 const MOCK_ALERTS = [
   { 
     id: 'al1', name: 'Sunita Devi', type: 'Ring SOS', alertStyle: 'sos', time: '10m ago', 
     location: 'House 42, Ramgarh', trigger: 'Ring SOS button pressed', 
     patientType: 'mother', phone: '+91 9876543210',
     patient: { age: '24', weeks: '28', phone: '+91 9876543210' },
-    vitals: { hr: '110 bpm', spo2: '96%' }
+    vitals: {
+      hr: '110 bpm',
+      spo2: '96%',
+      roomTemp: '26.4 °C',
+      roomHumidity: '54%',
+      bodyTemp: '36.8 °C'
+    }
   },
   { 
     id: 'al2', name: 'Ram Singh', type: 'Fall Detected', alertStyle: 'fall', time: '1h ago', 
     location: 'House 18, Sila', trigger: 'Accelerometer sensor trigger', 
     patientType: 'elderly', phone: '+91 9988776655',
     patient: { age: '68', weeks: '0', phone: '+91 9988776655' },
-    vitals: { hr: '82 bpm', spo2: '98%' }
+    vitals: {
+      hr: '82 bpm',
+      spo2: '98%',
+      roomTemp: '24.9 °C',
+      roomHumidity: '51%',
+      bodyTemp: '36.6 °C'
+    }
   }
 ];
 
@@ -63,6 +99,7 @@ const DoctorDashboard = () => {
   const { language, toggleLanguage } = useLanguage();
   const { profile } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const { patients } = useContext(AppContext);
   const [activeFilter, setActiveFilter] = useState('All');
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -85,19 +122,46 @@ const DoctorDashboard = () => {
         phone: a.patientPhone || a.phone || '+91 9999999999'
       },
       vitals: {
-        hr: a.heartRate ? `${a.heartRate} bpm` : 'N/A',
-        spo2: a.oxygen ? `${a.oxygen}%` : 'N/A'
+        hr: withUnit(a.heartRate ?? a.hr ?? a?.vitals?.hr, ' bpm'),
+        spo2: withUnit(a.oxygen ?? a.spo2 ?? a?.vitals?.spo2, '%'),
+        roomTemp: withUnit(a.roomTemp ?? a.roomTemperature ?? a.temperature ?? a?.vitals?.roomTemp, ' °C'),
+        roomHumidity: withUnit(a.roomHumidity ?? a.humidity ?? a?.vitals?.roomHumidity ?? a?.vitals?.humidity, '%'),
+        bodyTemp: withUnit(a.bodyTemp ?? a.bodyTemperature ?? a?.vitals?.bodyTemp, ' °C')
       }
     }));
     return fireAlerts.length === 0 ? MOCK_ALERTS : [...fireAlerts, ...MOCK_ALERTS];
   }, [firestoreAlerts]);
+
+  const contextReports = useMemo(() => {
+    return (patients || []).map((patient) => ({
+      id: `ctx-${patient.id}`,
+      name: patient.name || 'Unknown',
+      age: String(patient.age || '--'),
+      asha: patient.ashaWorker || 'Local Sync',
+      date: patient.date || 'Recently added',
+      urgency: toDoctorUrgency(patient.risk),
+      patientType: toDoctorPatientType(patient.type),
+      phc: patient.village ? `${patient.village} PHC` : 'Local PHC'
+    }));
+  }, [patients]);
 
   const handleViewReport = (rep) => {
     navigate(`/report/${rep.id}`);
   };
 
   const filteredAlerts = combinedAlerts.filter(a => activeFilter === 'All' || a.patientType === activeFilter);
-  const filteredReports = PDF_REPORTS.filter(r => activeFilter === 'All' || (activeFilter === 'mother' && r.patientType === 'pregnant') || r.patientType === activeFilter);
+  const allReports = useMemo(() => {
+    const reportById = new Map();
+    [...contextReports, ...PDF_REPORTS].forEach((report) => {
+      const key = String(report.name || report.id || '').toLowerCase();
+      if (!reportById.has(key)) {
+        reportById.set(key, report);
+      }
+    });
+    return Array.from(reportById.values());
+  }, [contextReports]);
+
+  const filteredReports = allReports.filter(r => activeFilter === 'All' || (activeFilter === 'mother' && r.patientType === 'pregnant') || r.patientType === activeFilter);
 
   const t = {
     en: {

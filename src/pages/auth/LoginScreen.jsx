@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { FaUserNurse, FaStethoscope, FaFemale, FaCheck, FaUserFriends, FaArrowLeft, FaHeartbeat, FaUserAlt } from 'react-icons/fa';
+import { FaUserNurse, FaStethoscope, FaFemale, FaUserFriends, FaArrowLeft, FaHeartbeat, FaUserAlt } from 'react-icons/fa';
 import { MdOutlineDarkMode, MdOutlineLightMode } from 'react-icons/md';
 import { useTheme } from '../../context/ThemeContext';
 import { useLanguage } from '../../context/LanguageContext';
@@ -41,8 +41,10 @@ const LoginScreen = () => {
 
   const initialRole = location.state?.role || 'mother';
   const initialType = location.state?.type || '';
+  const initialMode = location.state?.mode === 'signup' ? 'signup' : 'login';
   const [role, setRole] = useState(initialRole);
-  const [mode, setMode] = useState('login'); 
+  const [mode, setMode] = useState(initialMode); 
+  const isLoginMode = mode === 'login';
 
   const handleGoogleLogin = async () => {
     try {
@@ -55,9 +57,48 @@ const LoginScreen = () => {
         return;
       }
 
+      if (!result?.isNewUser && result?.profile) {
+        if (!isLoginMode) {
+          alert(language === 'en'
+            ? 'Account already exists. Please login.'
+            : 'ఖాతా ఇప్పటికే ఉంది. దయచేసి లాగిన్ అవ్వండి.');
+          setRole(result.profile.role || role);
+          setMode('login');
+          navigate('/login', {
+            replace: true,
+            state: {
+              role: result.profile.role || role,
+              type: result.profile.patientType || '',
+              mode: 'login'
+            }
+          });
+          return;
+        }
+
+        navigate(getRouteFromProfile(result.profile), { replace: true });
+        return;
+      }
+
       if (result?.isNewUser || !result?.profile) {
+        if (isLoginMode) {
+          const hasKnownRole = Boolean(location.state?.role || role);
+          if (hasKnownRole) {
+            navigate('/role-setup', {
+              replace: true,
+              state: {
+                preSelectedRole: role,
+                preSelectedType: role === 'patient' ? initialType : ''
+              }
+            });
+            return;
+          }
+
+          navigate('/role-setup', { replace: true });
+          return;
+        }
+
         if (role === 'patient' && !initialType) {
-          navigate('/patient-type-select', { replace: true });
+          navigate('/patient-type-select', { replace: true, state: { mode: 'signup' } });
           return;
         }
 
@@ -70,8 +111,6 @@ const LoginScreen = () => {
         });
         return;
       }
-
-      navigate(getRouteFromProfile(result.profile), { replace: true });
     } catch (err) {
       console.error(err);
       alert(language === 'en' ? 'Auth failed' : 'లాగిన్ విఫలమైంది');
@@ -81,14 +120,16 @@ const LoginScreen = () => {
   const text = {
     en: {
       loginTitle: 'Welcome Back',
-      loginSub: 'Select your role to login',
+      loginSub: 'Continue with Google to access your account',
+      signupSub: 'Select your role to create account',
       switchSignup: 'New to MaaSathi? Create Account',
       switchLogin: 'Already have an account? Login',
       continueGoogle: 'Continue with Google',
     },
     te: {
       loginTitle: 'మళ్ళీ స్వాగతం',
-      loginSub: 'లాగిన్ చేయడానికి మీ పాత్రను ఎంచుకోండి',
+      loginSub: 'మీ ఖాతాలోకి వెళ్లేందుకు Googleతో కొనసాగండి',
+      signupSub: 'ఖాతా సృష్టించడానికి మీ పాత్రను ఎంచుకోండి',
       switchSignup: 'కొత్త వినియోగదారుడా? ఖాతా తెరవండి',
       switchLogin: 'ఇప్పటికే ఖాతా ఉందా? లాగిన్ అవ్వండి',
       continueGoogle: 'Googleతో లాగిన్ అవ్వండి',
@@ -213,18 +254,22 @@ const LoginScreen = () => {
             </div>
 
             <h1 style={{ fontSize: '32px', fontWeight: 800, color: '#191c1d', marginBottom: '8px' }}>{text.loginTitle}</h1>
-            <p style={{ fontSize: '15px', color: '#594045', marginBottom: '32px' }}>{text.loginSub}</p>
+            <p style={{ fontSize: '15px', color: '#594045', marginBottom: '32px' }}>
+              {isLoginMode ? text.loginSub : text.signupSub}
+            </p>
 
-            <div className="role-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '32px' }}>
-              {ROLES.map((r) => (
-                <div key={r.id} className="role-card" data-active={role === r.id} onClick={() => setRole(r.id)}>
-                  <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: `${r.color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <r.icon size={20} color={r.color} />
+            {!isLoginMode && (
+              <div className="role-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '32px' }}>
+                {ROLES.map((r) => (
+                  <div key={r.id} className="role-card" data-active={role === r.id} onClick={() => setRole(r.id)}>
+                    <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: `${r.color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <r.icon size={20} color={r.color} />
+                    </div>
+                    <div style={{ fontSize: '13px', fontWeight: 700 }}>{r.label}</div>
                   </div>
-                  <div style={{ fontSize: '13px', fontWeight: 700 }}>{r.label}</div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
 
             <button onClick={handleGoogleLogin} disabled={loading} className="btn-google">
               <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#4285F4" d="M47.5 24.5C47.5 22.8 47.3 21.2 47.1 19.6H24.5V28.9H37.4C36.8 31.9 35.1 34.4 32.5 36.1V41.9H40.2C44.7 37.8 47.5 31.7 47.5 24.5Z"/><path fill="#34A853" d="M24.5 48C30.9 48 36.4 45.9 40.2 41.9L32.5 36.1C30.4 37.5 27.7 38.3 24.5 38.3C18.3 38.3 13 34.1 11.1 28.5H3.2V34.6C7.1 42.4 15.2 48 24.5 48Z"/><path fill="#FBBC05" d="M11.1 28.5C10.6 27 10.3 25.4 10.3 23.8C10.3 22.2 10.6 20.6 11.1 19.1V13H3.2C1.6 16.2 0.7 19.9 0.7 23.8C0.7 27.7 1.6 31.4 3.2 34.6L11.1 28.5Z"/><path fill="#EA4335" d="M24.5 9.4C28 9.4 31.1 10.6 33.6 12.9L40.4 6C36.3 2.3 30.9 0 24.5 0C15.2 0 7.1 5.6 3.2 13.4L11.1 19.5C13 13.9 18.3 9.4 24.5 9.4Z"/></svg>

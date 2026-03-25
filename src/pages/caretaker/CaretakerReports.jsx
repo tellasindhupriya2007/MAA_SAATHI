@@ -2,15 +2,22 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaArrowLeft, FaDownload, FaFileAlt, FaPaperPlane, FaFilePdf, FaEye } from 'react-icons/fa';
 import { generateProfessionalReport } from '../../utils/generatePdfReport';
+import { AppContext } from '../../context/AppContext';
 
 const CaretakerReports = () => {
   const navigate = useNavigate();
   const [isGenerating, setIsGenerating] = useState(false);
+  const { caretakerPatient } = React.useContext(AppContext);
 
   const handleDownload = (type) => {
     setIsGenerating(true);
-    const profile = { name: 'Saraswathi Reddy', age: 68, patientType: 'elderly', phc: 'Ramgarh PHC' };
-    const survey = { aiStatus: 'STABLE', aiParagraphEnglish: 'Intelligence analysis for March shows consistent cardiac health.' };
+    const profile = {
+      name: caretakerPatient?.name || 'Linked Patient',
+      age: caretakerPatient?.age || 0,
+      patientType: caretakerPatient?.type || 'elderly',
+      phc: 'Ramgarh PHC'
+    };
+    const survey = { aiStatus: 'STABLE', aiParagraphEnglish: `Mock intelligence analysis for ${caretakerPatient?.name || 'patient'} shows stable trends.` };
     generateProfessionalReport(profile, [], survey, 'download');
     setIsGenerating(false);
   };
@@ -20,9 +27,9 @@ const CaretakerReports = () => {
   };
 
   const reports = [
-    { title: 'March Summary', date: 'Published Mar 24' },
-    { title: 'February Summary', date: 'Published Mar 17' },
-    { title: 'January Summary', date: 'Published Feb 14' }
+    { title: `${caretakerPatient?.name || 'Patient'} - March Summary`, date: 'Published Mar 24' },
+    { title: `${caretakerPatient?.name || 'Patient'} - February Summary`, date: 'Published Mar 17' },
+    { title: `${caretakerPatient?.name || 'Patient'} - January Summary`, date: 'Published Feb 14' }
   ];
 
   return (

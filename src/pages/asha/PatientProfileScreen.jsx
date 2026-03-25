@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { 
   FaArrowLeft, FaEdit, FaMapMarkerAlt, FaUser, FaShieldAlt, 
   FaExclamationCircle, FaHistory, FaChevronDown, FaChevronUp, 
@@ -7,6 +7,7 @@ import {
   FaClipboardList, FaExchangeAlt, FaBaby, FaBabyCarriage
 } from 'react-icons/fa';
 import { FaLungs } from 'react-icons/fa6';
+import { AppContext } from '../../context/AppContext';
 
 const MOCK_PATIENT = {
   id: 'p1',
@@ -56,13 +57,111 @@ const MOCK_PATIENT = {
   }
 };
 
+const toDisplayType = (type) => (type === 'newMother' ? 'New Mother' : 'Pregnant');
+const toStoreType = (type) => (type === 'New Mother' ? 'newMother' : 'pregnant');
+const toInitials = (name = 'UN') =>
+  String(name)
+    .split(' ')
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
+
+const toDisplayPatient = (source) => {
+  if (!source) return MOCK_PATIENT;
+
+  const type = toDisplayType(source.type);
+  const age = source.age ? `${source.age} Years` : '24 Years';
+  const weeks =
+    type === 'New Mother'
+      ? 'Postnatal care'
+      : `${Number(source.weeks || source.weeksPregnant || 24)} weeks pregnant`;
+
+  return {
+    id: source.id,
+    name: source.name || 'Unknown Patient',
+    initials: source.initials || toInitials(source.name),
+    type,
+    weeks,
+    date: source.date || 'Visited today',
+    details: {
+      Age: age,
+      Phone: source.phone ? `+91 ${source.phone}` : '+91 98765 43210',
+      'House Number': source.house || '',
+      Village: source.village || '',
+      'Distance from PHC': source.distance ? `${source.distance} km` : '4.2 km',
+      'Nutrition Status': source.nutrition || 'Moderate',
+      'Emergency Contact': source.emergency || '+91 91234 56789',
+      babyDOB: source.babyDob || '',
+      babyWeight: source.babyWeight || ''
+    },
+    riskScore: Number(source.riskScore || (source.risk === 'HIGH' ? 78 : source.risk === 'MED' ? 55 : 28)),
+    riskLevel: source.risk || 'LOW',
+    riskFactors: Array.isArray(source.riskFactors) && source.riskFactors.length > 0
+      ? source.riskFactors
+      : (source.risk === 'HIGH' ? ['Needs close monitoring'] : ['Stable vitals']),
+    visits: Array.isArray(source.visits) && source.visits.length > 0 ? source.visits : MOCK_PATIENT.visits,
+    hasRing: source.hasRing ?? true,
+    vitals: {
+      hr: source?.vitals?.hr || '82 bpm',
+      spo2: source?.vitals?.spo2 || '98%',
+      steps: source?.vitals?.steps || '4,230'
+    }
+  };
+};
+
+const toStorePatient = (viewPatient, previous = {}) => {
+  const age = Number.parseInt(String(viewPatient.details.Age || '').replace(/\D/g, ''), 10) || previous.age || 0;
+  const phone = String(viewPatient.details.Phone || previous.phone || '').replace(/\D/g, '').slice(-10);
+  const house = String(viewPatient.details['House Number'] || previous.house || '');
+  const village = String(viewPatient.details.Village || previous.village || '');
+  const location = `${house}${village ? `, ${village}` : ''}`.trim();
+  const weekNumber =
+    viewPatient.type === 'Pregnant'
+      ? Number.parseInt(String(viewPatient.weeks || '').replace(/\D/g, ''), 10) || previous.weeks || 0
+      : 0;
+
+  return {
+    ...previous,
+    id: viewPatient.id,
+    name: viewPatient.name,
+    initials: toInitials(viewPatient.name),
+    type: toStoreType(viewPatient.type),
+    age,
+    phone,
+    house,
+    village,
+    location,
+    date: viewPatient.date || previous.date || 'Visited today',
+    risk: viewPatient.riskLevel || previous.risk || 'LOW',
+    riskScore: Number(viewPatient.riskScore || previous.riskScore || 0),
+    riskFactors: viewPatient.riskFactors || previous.riskFactors || [],
+    weeks: weekNumber,
+    nutrition: viewPatient.details['Nutrition Status'] || previous.nutrition || 'Moderate',
+    emergency: viewPatient.details['Emergency Contact'] || previous.emergency || '',
+    babyDob: viewPatient.details.babyDOB || previous.babyDob || '',
+    babyWeight: viewPatient.details.babyWeight || previous.babyWeight || '',
+    visits: viewPatient.visits || previous.visits || [],
+    hasRing: viewPatient.hasRing ?? previous.hasRing ?? true,
+    vitals: viewPatient.vitals || previous.vitals || { hr: '82 bpm', spo2: '98%', steps: '4,230' }
+  };
+};
+
 const PatientProfileScreen = () => {
   const navigate = useNavigate();
+  const { id } = useParams();
+  const { patients, updatePatient } = React.useContext(AppContext);
+  const sourcePatient = patients.find((p) => p.id === id);
+
   const [expandedVisitId, setExpandedVisitId] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [patientData, setPatientData] = useState(MOCK_PATIENT);
+  const [patientData, setPatientData] = useState(() => toDisplayPatient(sourcePatient));
   const [showConfirm, setShowConfirm] = useState(false);
   const [toast, setToast] = useState('');
+
+  React.useEffect(() => {
+    setPatientData(toDisplayPatient(sourcePatient));
+  }, [sourcePatient]);
 
   const toggleVisit = (vid) => {
     setExpandedVisitId(prev => prev === vid ? null : vid);
@@ -85,6 +184,11 @@ const PatientProfileScreen = () => {
   };
 
   const handleSave = () => {
+    if (sourcePatient) {
+      const updated = toStorePatient(patientData, sourcePatient);
+      updatePatient(updated);
+      setPatientData(toDisplayPatient(updated));
+    }
     showToast('Profile updated');
     setIsEditing(false);
   };
@@ -435,7 +539,7 @@ const PatientProfileScreen = () => {
             background: 'var(--surface)', borderTop: '1px solid var(--border)', padding: '16px 24px',
             display: 'flex', flexDirection: 'column', gap: '12px', zIndex: 100
           }}>
-            <button onClick={() => { setPatientData(MOCK_PATIENT); setIsEditing(false); }} style={{
+            <button onClick={() => { setPatientData(toDisplayPatient(sourcePatient)); setIsEditing(false); }} style={{
               background: 'transparent', color: 'var(--text-secondary)', border: 'none',
               fontFamily: '"DM Sans", sans-serif', fontSize: '15px', fontWeight: 600, cursor: 'pointer', height: '40px'
             }}>

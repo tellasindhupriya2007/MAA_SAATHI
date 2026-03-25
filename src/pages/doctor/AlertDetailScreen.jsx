@@ -40,23 +40,43 @@ const AlertDetailScreen = () => {
     trigger: 'Ring SOS button pressed',
     location: 'House 42, Ramgarh',
     time: '10 mins ago',
-    vitals: { hr: '110 bpm', spo2: '96%' },
+    vitals: {
+      hr: '110 bpm',
+      spo2: '96%',
+      roomTemp: '26.4 °C',
+      roomHumidity: '54%',
+      bodyTemp: '36.8 °C'
+    },
     patient: { age: '24', weeks: '28', phone: '+91 9876543210' }
   };
 
   const t = {
     en: {
       title: "Emergency Console", resolve: "Mark as Resolved", call: "Direct Dial", sendAlert: "Emergency Ring",
-      viewProfile: "Patient Records", vitals: "Vitals Snapshot", hr: "BPM", spo2: "SpO2 %",
+      viewProfile: "Patient Records", vitals: "Vitals Snapshot", hr: "Heart Rate", spo2: "SpO2",
+      roomTemp: "Room Temp", roomHumidity: "Room Humidity", bodyTemp: "Body Temp",
       confirmTitle: "Finalize Case?", confirmBody: "Confirming this will mark the emergency as handled in PHC records."
     },
     te: {
       title: "అత్యవసర కన్సోల్", resolve: "పరిష్కరించబడింది", call: "కాల్ చేయండి", sendAlert: "రింగ్ చేయండి",
-      viewProfile: "రోగి రికార్డులు", vitals: "ప్రాణాధారాలు", hr: "BPM", spo2: "SpO2 %",
+      viewProfile: "రోగి రికార్డులు", vitals: "ప్రాణాధారాలు", hr: "హార్ట్ రేట్", spo2: "SpO2",
+      roomTemp: "గది ఉష్ణోగ్రత", roomHumidity: "గది ఆర్ద్రత", bodyTemp: "శరీర ఉష్ణోగ్రత",
       confirmTitle: "కేసును ముగించాలా?", confirmBody: "దీనిని ధృవీకరించడం ద్వారా ఈ అత్యవసర పరిస్థితి పరిష్కరించబడినట్లు నమోదు చేయబడుతుంది."
     }
   };
   const text = t[language] || t.en;
+  const vitalsSnapshot = [
+    { key: 'hr', label: text.hr, value: alertData.vitals?.hr || 'N/A', color: themeColors.danger },
+    { key: 'spo2', label: text.spo2, value: alertData.vitals?.spo2 || 'N/A', color: themeColors.secondary },
+    { key: 'roomTemp', label: text.roomTemp, value: alertData.vitals?.roomTemp || 'N/A', color: themeColors.textMain },
+    {
+      key: 'roomHumidity',
+      label: text.roomHumidity,
+      value: alertData.vitals?.roomHumidity || alertData.vitals?.humidity || 'N/A',
+      color: themeColors.textMain
+    },
+    { key: 'bodyTemp', label: text.bodyTemp, value: alertData.vitals?.bodyTemp || 'N/A', color: themeColors.textMain }
+  ];
 
   const handleResolve = async () => {
     setResolving(true);
@@ -120,13 +140,22 @@ const AlertDetailScreen = () => {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '48px' }}>
              <div style={{ background: 'white', borderRadius: '24px', padding: '32px' }}>
                 <div style={{ fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', color: themeColors.textTertiary, letterSpacing: '1px', marginBottom: '20px' }}>{text.vitals}</div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                   <span style={{ fontSize: '14px', color: themeColors.textMuted }}>{text.hr}</span>
-                   <span style={{ fontSize: '24px', fontWeight: 800, color: themeColors.danger }}>{alertData.vitals?.hr || 'N/A'}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                   <span style={{ fontSize: '14px', color: themeColors.textMuted }}>{text.spo2}</span>
-                   <span style={{ fontSize: '24px', fontWeight: 800, color: themeColors.secondary }}>{alertData.vitals?.spo2 || 'N/A'}</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  {vitalsSnapshot.map((vital, idx) => (
+                    <div
+                      key={vital.key}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        paddingBottom: idx === vitalsSnapshot.length - 1 ? 0 : '12px',
+                        borderBottom: idx === vitalsSnapshot.length - 1 ? 'none' : `1px dashed ${themeColors.surfaceHigh}`
+                      }}
+                    >
+                      <span style={{ fontSize: '14px', color: themeColors.textMuted }}>{vital.label}</span>
+                      <span style={{ fontSize: '22px', fontWeight: 800, color: vital.color }}>{vital.value}</span>
+                    </div>
+                  ))}
                 </div>
              </div>
 

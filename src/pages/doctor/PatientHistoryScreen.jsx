@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaArrowLeft, FaSearch, FaChevronDown, FaChevronUp, FaFilePdf, FaTimes, FaCircle, FaUserInjured, FaStethoscope } from 'react-icons/fa';
 import DoctorLayout from '../../layouts/DoctorLayout';
 import { useLanguage } from '../../context/LanguageContext';
 import { generateInstantReport } from '../../utils/generatePdfReport';
+import { AppContext } from '../../context/AppContext';
 
 const MOCK_PATIENTS = [
   {
@@ -39,9 +40,25 @@ const riskStyles = {
   STABLE:   { bg: 'var(--success-light)', color: 'var(--success)', label: 'STABLE'   },
 };
 
+const toHistoryRisk = (risk = '') => {
+  const normalized = String(risk || '').toUpperCase();
+  if (normalized === 'HIGH' || normalized === 'CRITICAL') return 'CRITICAL';
+  if (normalized === 'MED' || normalized === 'MODERATE') return 'MODERATE';
+  return 'STABLE';
+};
+
+const toHistoryType = (type = '') => {
+  if (type === 'pregnant' || type === 'mother') return 'Pregnancy';
+  if (type === 'newMother') return 'Postnatal';
+  if (type === 'elderly') return 'Elderly';
+  if (type === 'wellness') return 'Wellness';
+  return 'General';
+};
+
 const PatientHistoryScreen = () => {
   const navigate = useNavigate();
   const { language } = useLanguage();
+  const { patients } = React.useContext(AppContext);
 
   const [activeFilter, setActiveFilter] = useState('All');
   const [expandedId, setExpandedId]     = useState(null);
@@ -79,7 +96,37 @@ const PatientHistoryScreen = () => {
   };
   const text = t[language] || t.en;
 
-  const filtered = MOCK_PATIENTS.filter(p => {
+  const contextPatients = useMemo(() => {
+    return (patients || []).map((patient) => ({
+      id: `ctx-${patient.id}`,
+      name: patient.name || 'Unknown Patient',
+      village: patient.village || 'Unknown village',
+      visits: Math.max(1, Array.isArray(patient.visits) ? patient.visits.length : 1),
+      lastDate: patient.date || 'Recently added',
+      risk: toHistoryRisk(patient.risk),
+      type: toHistoryType(patient.type),
+      surveys: [
+        {
+          id: `ctx-s-${patient.id}`,
+          date: patient.date || 'Today',
+          type: 'Vitals Snapshot',
+          result: toHistoryRisk(patient.risk),
+          pdf: true
+        }
+      ]
+    }));
+  }, [patients]);
+
+  const allPatients = useMemo(() => {
+    const byName = new Map();
+    [...contextPatients, ...MOCK_PATIENTS].forEach((patient) => {
+      const key = String(patient.name || '').toLowerCase();
+      if (!byName.has(key)) byName.set(key, patient);
+    });
+    return Array.from(byName.values());
+  }, [contextPatients]);
+
+  const filtered = allPatients.filter(p => {
     const matchesFilter =
       activeFilter === 'All'          ? true :
       activeFilter === 'Critical Only'? p.risk === 'CRITICAL' :

@@ -1,10 +1,12 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { FaArrowLeft, FaUserFriends, FaHeartbeat, FaChevronRight } from 'react-icons/fa';
 import { MdPregnantWoman } from 'react-icons/md';
 
 const PatientTypeSelect = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const nextMode = location.state?.mode === 'signup' ? 'signup' : 'login';
 
   const cards = [
     {
@@ -124,7 +126,7 @@ const PatientTypeSelect = () => {
             <div 
               key={card.id} 
               className="selection-card"
-              onClick={() => navigate('/login', { state: { role: card.role, type: card.type } })}
+              onClick={() => navigate('/login', { state: { role: card.role, type: card.type, mode: nextMode } })}
             >
               <div className="icon-circle" style={{ background: card.bg }}>
                 {card.icon}

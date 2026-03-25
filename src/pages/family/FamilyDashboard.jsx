@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { 
   FaHome, FaUsers, FaMapMarkedAlt, FaUser, 
   FaBell, FaHeartbeat, FaClock, FaChartLine, 
@@ -13,13 +13,23 @@ import { useTheme } from '../../context/ThemeContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../hooks/useAuth';
 import { generateProfessionalReport } from '../../utils/generatePdfReport';
+import { AppContext } from '../../context/AppContext';
+
+const getRelativeTime = (timestamp) => {
+  if (!timestamp) return 'just now';
+  const mins = Math.max(0, Math.floor((Date.now() - timestamp) / 60000));
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins} min${mins === 1 ? '' : 's'} ago`;
+  const hours = Math.floor(mins / 60);
+  return `${hours} hr${hours === 1 ? '' : 's'} ago`;
+};
 
 const FamilyDashboard = () => {
   const navigate = useNavigate();
-  const location = useLocation();
   const { theme, toggleTheme } = useTheme();
   const { language, toggleLanguage } = useLanguage();
-  const { profile, logout } = useAuth();
+  const { profile } = useAuth();
+  const { patients, caretakerPatient, caretakerLive, caretakerAlerts } = React.useContext(AppContext);
 
   const [activeTab, setActiveTab] = useState('home');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -28,10 +38,7 @@ const FamilyDashboard = () => {
   const vitalsRef = useRef(null);
   const alertsRef = useRef(null);
 
-  const [alerts] = useState([
-    { id: 'al1', patient: 'Saraswathi Reddy', type: 'Ring SOS pressed', location: 'House 12, Ramgarh', time: '10 mins ago', status: 'CRITICAL' },
-    { id: 'al2', patient: 'Saraswathi Reddy', type: 'Abnormal Heart Rate', location: 'House 12, Ramgarh', time: 'Yesterday', status: 'RESOLVED' }
-  ]);
+  const alerts = caretakerAlerts || [];
 
   const userName = profile?.name?.split(' ')[0] || 'Lakshmi';
   const initial = (profile?.name || 'Lakshmi').charAt(0);
@@ -56,14 +63,19 @@ const FamilyDashboard = () => {
   };
 
   const stats = [
-    { label: 'HEART RATE', value: '78 bpm', color: 'var(--success)', icon: FaHeartbeat, iconBg: 'var(--danger-light)' },
-    { label: 'SPO2', value: '98%', color: 'var(--info)', icon: FaTint, iconBg: 'var(--info-light)' },
-    { label: 'LAST SEEN', value: '2 mins ago', color: 'var(--warning)', icon: FaClock, iconBg: 'var(--warning-light)' },
+    { label: 'HEART RATE', value: `${Math.round(caretakerLive?.hr ?? 78)} bpm`, color: 'var(--danger)', icon: FaHeartbeat, iconBg: 'var(--danger-light)' },
+    { label: 'SPO2', value: `${Math.round(caretakerLive?.spo2 ?? 98)}%`, color: 'var(--info)', icon: FaTint, iconBg: 'var(--info-light)' },
+    { label: 'LAST SEEN', value: getRelativeTime(caretakerLive?.updatedAt), color: 'var(--warning)', icon: FaClock, iconBg: 'var(--warning-light)' },
   ];
 
   const handleDownloadPdf = (rep) => {
     setIsGenerating(true);
-    const reportProfile = { name: 'Saraswathi Reddy', age: 68, patientType: 'elderly', phc: 'Ramgarh PHC' };
+    const reportProfile = {
+      name: caretakerPatient?.name || 'Linked Patient',
+      age: caretakerPatient?.age || 0,
+      patientType: caretakerPatient?.type || 'elderly',
+      phc: 'Ramgarh PHC'
+    };
     const reportSurvey = { aiStatus: 'STABLE', aiParagraphEnglish: `Intelligence analysis for ${rep?.month || 'March'} shows consistent cardiac health.` };
     generateProfessionalReport(reportProfile, [], reportSurvey, 'download');
     setIsGenerating(false);
@@ -181,10 +193,12 @@ const FamilyDashboard = () => {
              <div>
                 <div style={{ fontSize: '11px', fontWeight: 800, color: 'var(--text-tertiary)', letterSpacing: '1px' }}>{dynamicDate}</div>
                 <h1 style={{ fontSize: '28px', fontWeight: 800, margin: '4px 0' }}>Namaste, {userName}</h1>
-                <p style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>Monitoring 1 loved one • Active Connection</p>
+                <p style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
+                  Monitoring {Math.max(1, patients.length)} loved one{patients.length === 1 ? '' : 's'} • Active Connection
+                </p>
              </div>
              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <div onClick={() => setShowProfileModal(true)} style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'var(--accent)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '18px', cursor: 'pointer' }}>
+                <div onClick={() => navigate('/caretaker/profile')} style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'var(--accent)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '18px', cursor: 'pointer' }}>
                    {initial}
                 </div>
              </div>
@@ -197,7 +211,7 @@ const FamilyDashboard = () => {
                     <MdNotificationsActive size={28} />
                     <div>
                       <div style={{ fontSize: '20px', fontWeight: 800 }}>{alerts[0].patient}</div>
-                      <div style={{ fontSize: '13px', opacity: 0.9 }}>{alerts[0].type} • {alerts[0].location}</div>
+                      <div style={{ fontSize: '13px', opacity: 0.9 }}>{alerts[0].type} • {alerts[0].location || caretakerPatient?.location || 'N/A'}</div>
                     </div>
                  </div>
                  <button onClick={() => handleNavClick('alerts')} style={{ background: 'white', color: 'var(--danger)', border: 'none', padding: '10px 24px', borderRadius: '100px', fontWeight: 800, cursor: 'pointer' }}>
@@ -242,19 +256,33 @@ const FamilyDashboard = () => {
 
           <div className="patient-monitor" id="patient-track">
              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                <div style={{ width: '56px', height: '56px', borderRadius: '14px', background: 'var(--accent-light)', color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '20px' }}>SR</div>
+                <div style={{ width: '56px', height: '56px', borderRadius: '14px', background: 'var(--accent-light)', color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '20px' }}>
+                  {caretakerPatient?.initials || 'PT'}
+                </div>
                 <div>
-                   <div style={{ fontSize: '18px', fontWeight: 800 }}>Saraswathi Reddy</div>
-                   <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', fontWeight: 600 }}>68 Yrs • Diabetic • Ward 12</div>
+                   <div style={{ fontSize: '18px', fontWeight: 800 }}>{caretakerPatient?.name || 'No linked patient'}</div>
+                   <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', fontWeight: 600 }}>
+                     {caretakerPatient ? `${caretakerPatient.age || '--'} Yrs • ${caretakerPatient.type === 'newMother' ? 'New Mother' : 'Pregnant'} • ${caretakerPatient.location || 'N/A'}` : 'Link a patient to begin'}
+                   </div>
                 </div>
              </div>
              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: 'var(--success)' }} />
-                <span style={{ fontSize: '14px', fontWeight: 800, color: 'var(--success)' }}>HEALTH STABLE</span>
+                <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: caretakerLive?.status === 'critical' ? 'var(--danger)' : caretakerLive?.status === 'attention' ? 'var(--warning)' : 'var(--success)' }} />
+                <span style={{ fontSize: '14px', fontWeight: 800, color: caretakerLive?.status === 'critical' ? 'var(--danger)' : caretakerLive?.status === 'attention' ? 'var(--warning)' : 'var(--success)' }}>
+                  {caretakerLive?.status === 'critical' ? 'HEALTH CRITICAL' : caretakerLive?.status === 'attention' ? 'NEEDS ATTENTION' : 'HEALTH STABLE'}
+                </span>
              </div>
              <div style={{ display: 'flex', gap: '8px' }}>
-                <button style={{ width: '44px', height: '44px', borderRadius: '12px', background: 'var(--bg-secondary)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><FaPhone size={18}/></button>
-                <button style={{ width: '44px', height: '44px', borderRadius: '12px', background: 'var(--accent)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><FaChartLine color="white" size={18}/></button>
+                <button
+                  onClick={() => {
+                    const phone = caretakerPatient?.phone;
+                    if (phone) window.location.href = `tel:+91${phone}`;
+                  }}
+                  style={{ width: '44px', height: '44px', borderRadius: '12px', background: 'var(--bg-secondary)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: caretakerPatient?.phone ? 'pointer' : 'not-allowed', opacity: caretakerPatient?.phone ? 1 : 0.6 }}
+                >
+                  <FaPhone size={18}/>
+                </button>
+                <button onClick={() => navigate('/caretaker/vitals')} style={{ width: '44px', height: '44px', borderRadius: '12px', background: 'var(--accent)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><FaChartLine color="white" size={18}/></button>
              </div>
           </div>
 

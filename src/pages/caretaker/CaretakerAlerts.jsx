@@ -1,42 +1,13 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaArrowLeft, FaCheckCircle, FaExclamationCircle, FaShieldAlt } from 'react-icons/fa';
+import { AppContext } from '../../context/AppContext';
 
 const CaretakerAlerts = () => {
   const navigate = useNavigate();
   const [filter, setFilter] = useState('All');
-
-  const alerts = [
-    { 
-      id: 1, 
-      patient: 'Saraswathi Reddy', 
-      type: 'Ring SOS', 
-      trigger: 'Ring SOS button pressed', 
-      time: '10 mins ago', 
-      status: 'Active',
-      color: 'var(--danger)'
-    },
-    { 
-      id: 2, 
-      patient: 'Saraswathi Reddy', 
-      type: 'Fall Detected', 
-      trigger: 'Fall detected by accelerometer', 
-      time: '2 days ago', 
-      status: 'Resolved',
-      resolvedDate: 'Resolved Mar 22',
-      color: 'var(--warning)'
-    },
-    { 
-      id: 3, 
-      patient: 'Saraswathi Reddy', 
-      type: 'AI Critical', 
-      trigger: 'Sudden arrhythmia detected', 
-      time: '1 week ago', 
-      status: 'Resolved',
-      resolvedDate: 'Resolved Mar 18',
-      color: '#7C3AED'
-    }
-  ];
+  const { caretakerAlerts } = React.useContext(AppContext);
+  const alerts = caretakerAlerts || [];
 
   const filteredAlerts = alerts.filter(a => 
     filter === 'All' || 
@@ -73,6 +44,11 @@ const CaretakerAlerts = () => {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        {filteredAlerts.length === 0 && (
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '16px', padding: '20px', color: 'var(--text-secondary)' }}>
+            No alerts for selected filter.
+          </div>
+        )}
         {filteredAlerts.map(alert => (
           <div key={alert.id} style={{ 
             background: 'var(--surface)', borderLeft: `3px solid ${alert.color}`, 

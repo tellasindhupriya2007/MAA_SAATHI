@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { FaUserNurse, FaStethoscope, FaFemale, FaCheck, FaUserFriends, FaUserAlt } from 'react-icons/fa';
 import { useAuth } from '../../hooks/useAuth';
@@ -7,26 +7,28 @@ const RoleSetupScreen = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { setupRole } = useAuth();
-  const [loading, setLoading] = useState(false);
-  const [selectedRole, setSelectedRole] = useState(location.state?.preSelectedRole || null);
+  const preSelectedRole = location.state?.preSelectedRole || null;
   const preSelectedType = location.state?.preSelectedType || '';
-  
-  const handleCompleteSetup = async () => {
-    if (!selectedRole) return;
+  const [loading, setLoading] = useState(false);
+  const [selectedRole, setSelectedRole] = useState(preSelectedRole);
+  const autoSetupTriggered = useRef(false);
+
+  const completeSetup = async (roleToSetup, typeToSetup = '') => {
+    if (!roleToSetup) return;
     setLoading(true);
     try {
-      if (selectedRole === 'asha') await setupRole('asha', '', true);
-      else if (selectedRole === 'doctor') await setupRole('doctor', '', true);
-      else if (selectedRole === 'caretaker') await setupRole('caretaker', '', true);
-      else await setupRole(selectedRole, preSelectedType, false);
+      if (roleToSetup === 'asha') await setupRole('asha', '', true);
+      else if (roleToSetup === 'doctor') await setupRole('doctor', '', true);
+      else if (roleToSetup === 'caretaker') await setupRole('caretaker', '', true);
+      else await setupRole(roleToSetup, typeToSetup, false);
 
-      if (selectedRole === 'asha') navigate('/asha/dashboard', { replace: true });
-      else if (selectedRole === 'doctor') navigate('/doctor/dashboard', { replace: true });
-      else if (selectedRole === 'mother') navigate('/mother/medical-history', { replace: true });
-      else if (selectedRole === 'caretaker') navigate('/family-dashboard', { replace: true });
-      else if (selectedRole === 'patient') {
-        if (preSelectedType === 'elderly') navigate('/elderly/health-survey', { replace: true });
-        else if (preSelectedType === 'wellness') navigate('/wellness/health-survey', { replace: true });
+      if (roleToSetup === 'asha') navigate('/asha/dashboard', { replace: true });
+      else if (roleToSetup === 'doctor') navigate('/doctor/dashboard', { replace: true });
+      else if (roleToSetup === 'mother') navigate('/mother/medical-history', { replace: true });
+      else if (roleToSetup === 'caretaker') navigate('/family-dashboard', { replace: true });
+      else if (roleToSetup === 'patient') {
+        if (typeToSetup === 'elderly') navigate('/elderly/health-survey', { replace: true });
+        else if (typeToSetup === 'wellness') navigate('/wellness/health-survey', { replace: true });
         else navigate('/welcome', { replace: true });
       }
       else navigate('/welcome', { replace: true });
@@ -36,6 +38,36 @@ const RoleSetupScreen = () => {
       alert("Role setup failed. Please try again.");
     }
   };
+
+  const handleCompleteSetup = async () => {
+    await completeSetup(selectedRole, preSelectedType);
+  };
+
+  useEffect(() => {
+    if (!preSelectedRole || autoSetupTriggered.current) return;
+    autoSetupTriggered.current = true;
+    void completeSetup(preSelectedRole, preSelectedType);
+  }, [preSelectedRole, preSelectedType]);
+
+  if (preSelectedRole) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-primary px-24 py-40">
+        <div className="w-full max-w-md text-center">
+          <h1 className="display text-center m-b-8">Welcome to MaaSathi</h1>
+          <p className="body-large text-secondary text-center m-b-40">
+            Setting up your profile and taking you to dashboard...
+          </p>
+          <button
+            className="btn btn-primary w-full"
+            disabled
+            style={{ opacity: 0.8, height: '52px' }}
+          >
+            {loading ? 'Setting up profile...' : 'Preparing your account...'}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-primary px-24 py-40">
