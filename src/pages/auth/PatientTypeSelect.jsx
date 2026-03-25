@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { FaArrowLeft, FaUserFriends, FaHeartbeat, FaChevronRight } from 'react-icons/fa';
+import { FaArrowLeft, FaUserFriends, FaHeartbeat, FaChevronRight, FaMagic } from 'react-icons/fa';
 import { MdPregnantWoman } from 'react-icons/md';
 
 const PatientTypeSelect = () => {
@@ -37,6 +37,20 @@ const PatientTypeSelect = () => {
       type: 'wellness'
     }
   ];
+
+  const handleCardClick = (card) => {
+    // Preserve signup/login mode while selecting patient subtype.
+    navigate('/login', { state: { role: card.role, type: card.type, mode: nextMode } });
+  };
+
+  const handleGuestSurvey = (card) => {
+    const paths = {
+      pregnant: '/mother/medical-history',
+      elderly: '/elderly/health-survey',
+      wellness: '/wellness/health-survey'
+    };
+    navigate(paths[card.type], { state: { isGuest: true, patientType: card.type } });
+  };
 
   return (
     <div className="patient-type-container" style={{
@@ -123,23 +137,36 @@ const PatientTypeSelect = () => {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', width: '100%' }}>
           {cards.map((card) => (
-            <div 
-              key={card.id} 
-              className="selection-card"
-              onClick={() => navigate('/login', { state: { role: card.role, type: card.type, mode: nextMode } })}
-            >
-              <div className="icon-circle" style={{ background: card.bg }}>
-                {card.icon}
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)' }}>
-                  {card.title}
+            <div key={card.id} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div 
+                className="selection-card"
+                onClick={() => handleCardClick(card)}
+              >
+                <div className="icon-circle" style={{ background: card.bg }}>
+                  {card.icon}
                 </div>
-                <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '3px', lineHeight: 1.4 }}>
-                  {card.subtitle}
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                    {card.title}
+                  </div>
+                  <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '3px', lineHeight: 1.4 }}>
+                    {card.subtitle}
+                  </div>
                 </div>
+                <FaChevronRight size={16} color="var(--text-tertiary)" style={{ marginLeft: 'auto' }} />
               </div>
-              <FaChevronRight size={16} color="var(--text-tertiary)" style={{ marginLeft: 'auto' }} />
+              
+              <button 
+                onClick={() => handleGuestSurvey(card)}
+                style={{
+                  background: 'none', border: 'none', color: 'var(--accent)', 
+                  fontSize: '13px', fontWeight: 600, padding: '4px 8px', 
+                  alignSelf: 'flex-end', cursor: 'pointer', display: 'flex',
+                  alignItems: 'center', gap: '4px'
+                }}
+              >
+                Take survey without login <FaMagic size={12} />
+              </button>
             </div>
           ))}
         </div>

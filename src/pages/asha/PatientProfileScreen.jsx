@@ -148,8 +148,8 @@ const toStorePatient = (viewPatient, previous = {}) => {
 };
 
 const PatientProfileScreen = () => {
-  const navigate = useNavigate();
   const { id } = useParams();
+  const navigate = useNavigate();
   const { patients, updatePatient } = React.useContext(AppContext);
   const sourcePatient = patients.find((p) => p.id === id);
 

@@ -47,16 +47,19 @@ const AddPatientScreen = () => {
       return;
     }
 
+    const pId = 'p' + Date.now();
     const newPatient = {
       ...formData,
-      type
+      type,
+      id: pId
     };
     
     addPatient(newPatient);
 
-    showToast('Patient registered');
+    showToast('Patient registered! Opening survey...');
     setTimeout(() => {
-      navigate('/asha/patients');
+      const surveyPath = type === 'newMother' ? '/asha/surveys/new-mother' : '/asha/surveys/pregnant';
+      navigate(surveyPath, { state: { patient: newPatient, patientId: pId } });
     }, 1000);
   };
 

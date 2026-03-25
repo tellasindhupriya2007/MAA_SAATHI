@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   FaArrowLeft, FaCalendarAlt, FaHeartbeat, FaPills, 
   FaWalking, FaUserFriends, FaBrain, FaLungs, 
@@ -119,6 +119,7 @@ const ElderlyHealthSurvey = () => {
   const navigate = useNavigate();
   const { language, toggleLanguage } = useLanguage();
   const { profile, updateProfile } = useAuth();
+  const { isGuest = false } = useLocation().state || {};
   
   const [answers, setAnswers] = useState({});
   const [otherText, setOtherText] = useState({});
@@ -130,12 +131,11 @@ const ElderlyHealthSurvey = () => {
   const isComplete = answeredCount === t.questions.length;
   const progressPercent = (answeredCount / t.questions.length) * 100;
 
-  // Check if profile exists and redirect
   useEffect(() => {
-    if (profile?.elderlyHealthProfile) {
+    if (!isGuest && profile?.elderlyHealthProfile) {
       navigate('/dashboard/elderly');
     }
-  }, [profile, navigate]);
+  }, [profile, navigate, isGuest]);
 
   const handleSelect = (qId, optIdx) => {
     setAnswers(prev => ({ ...prev, [qId]: optIdx }));
@@ -160,7 +160,7 @@ const ElderlyHealthSurvey = () => {
 
     try {
       if (profile?.uid) {
-        // AI Analysis Simulation (Based on high-risk keywords)
+        // AI Analysis Simulation
         let aiStatus = 'STABLE';
         let aiParagraphEnglish = 'Overall health profile appears stable for your age group. Continue regular physical activity and follow your prescribed medication schedule.';
         
@@ -170,13 +170,13 @@ const ElderlyHealthSurvey = () => {
         const rawAnswers = profileAnswers.map(a => a.answer);
         if (rawAnswers.some(ans => criticalSigns.includes(ans))) {
           aiStatus = 'CRITICAL';
-          aiParagraphEnglish = 'URGENT: Your health profile indicates several high-risk indicators such as chest pain or frequent falls. We recommend an immediate consultation with your doctor. An alert has been sent to your primary healthcare provider.';
+          aiParagraphEnglish = 'URGENT: Your health profile indicates several high-risk indicators such as chest pain or frequent falls. We recommend an immediate consultation with your doctor.';
         } else if (rawAnswers.some(ans => moderateSigns.includes(ans))) {
           aiStatus = 'MODERATE';
-          aiParagraphEnglish = 'MODERATE RISK: Your profile suggests chronic conditions like Blood Pressure or breathing difficulties. Please schedule a review with your doctor within the next 48 hours for a baseline checkup.';
+          aiParagraphEnglish = 'MODERATE RISK: Your profile suggests chronic conditions like Blood Pressure or breathing difficulties. Please schedule a review with your doctor within the next 48 hours.';
         }
 
-        // Save to Firebase + refresh auth context profile to avoid stale redirect guards
+        // Save to Firebase + refresh context
         await updateProfile({
           elderlyHealthProfile: {
             answers: profileAnswers,
@@ -192,7 +192,7 @@ const ElderlyHealthSurvey = () => {
           isSurveyCompleted: true
         });
 
-        // Add to reports collection for record keeping
+        // Add to reports collection
         await addDoc(collection(db, 'reports'), {
           patientId: profile.uid,
           patientName: profile.name,
@@ -203,7 +203,6 @@ const ElderlyHealthSurvey = () => {
           createdAt: serverTimestamp()
         });
 
-        // Trigger Alert if CRITICAL
         if (aiStatus === 'CRITICAL') {
            await addDoc(collection(db, 'alerts'), {
              type: 'aiCritical',
@@ -217,7 +216,18 @@ const ElderlyHealthSurvey = () => {
         }
       }
       
-      setTimeout(() => { navigate('/dashboard/elderly'); }, 1500);
+      if (isGuest) {
+        navigate('/shared/ai-report', { 
+          state: { 
+            answers, 
+            questions: t.questions,
+            isGuest: true,
+            patient: { name: 'Guest User', age: answers.age || '60+' }
+          } 
+        });
+      } else {
+        setTimeout(() => { navigate('/dashboard/elderly'); }, 1500);
+      }
     } catch (err) {
       console.error(err);
       setIsSubmitting(false);
@@ -271,43 +281,43 @@ const ElderlyHealthSurvey = () => {
         justifyContent: 'space-between' 
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button onClick={() => navigate(-1)} style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--bg-secondary)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <FaArrowLeft size={16} />
+          <button onClick={() => navigate(-1)} style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--bg-secondary)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+            <FaArrowLeft size={16} color="var(--text-primary)" />
           </button>
-          <div style={{ fontSize: '18px', fontWeight: 700 }}>{t.title}</div>
+          <div style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)' }}>{t.title}</div>
         </div>
-        <div style={{ display: 'flex', background: 'var(--bg-secondary)', borderRadius: '100px', padding: '4px' }}>
-          <button onClick={() => toggleLanguage('en')} style={{ padding: '6px 12px', borderRadius: '100px', border: 'none', background: language === 'en' ? 'var(--accent)' : 'transparent', color: language === 'en' ? 'white' : 'var(--text-secondary)', fontWeight: 600 }}>EN</button>
-          <button onClick={() => toggleLanguage('te')} style={{ padding: '6px 12px', borderRadius: '100px', border: 'none', background: language === 'te' ? 'var(--accent)' : 'transparent', color: language === 'te' ? 'white' : 'var(--text-secondary)', fontWeight: 600 }}>TE</button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button onClick={() => toggleLanguage('en')} style={{ padding: '6px 14px', borderRadius: '100px', border: '1.5px solid var(--border)', background: language === 'en' ? 'var(--accent)' : 'transparent', color: language === 'en' ? 'white' : 'var(--text-secondary)', fontWeight: 600, cursor: 'pointer' }}>EN</button>
+          <button onClick={() => toggleLanguage('te')} style={{ padding: '6px 14px', borderRadius: '100px', border: '1.5px solid var(--border)', background: language === 'te' ? 'var(--accent)' : 'transparent', color: language === 'te' ? 'white' : 'var(--text-secondary)', fontWeight: 600, cursor: 'pointer' }}>TE</button>
         </div>
       </header>
 
-      <div className="px-mobile-16" style={{ padding: '16px 24px', background: 'var(--accent-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ padding: '16px 24px', background: 'var(--accent-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--accent)' }}>{t.subtitle}</span>
         <div style={{ padding: '4px 12px', background: 'var(--surface)', borderRadius: '100px', fontSize: '12px', fontWeight: 600 }}>{t.progress(answeredCount, t.questions.length)}</div>
       </div>
 
       <div style={{ height: '4px', background: 'var(--border)' }}>
-        <div style={{ height: '100%', background: 'var(--accent)', width: `${progressPercent}%`, transition: 'width 0.3s' }} />
+        <div style={{ height: '100%', background: 'var(--accent)', width: `${progressPercent}%`, transition: 'width 0.3s ease' }} />
       </div>
 
       <div style={{ padding: '20px 0 120px 0', maxWidth: '720px', margin: '0 auto' }}>
         {t.questions.map((q, idx) => (
-          <div key={q.id} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-xl)', padding: '20px', margin: '0 16px 16px 16px' }}>
+          <div key={q.id} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-xl)', padding: '24px', margin: '0 16px 16px 16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '20px' }}>
-              <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <q.icon size={18} color={q.color || 'var(--accent)'} />
+              <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <q.icon size={22} color={q.color || 'var(--accent)'} />
               </div>
               <div>
-                <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '1px' }}>QUESTION {idx + 1}</div>
-                <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.3 }}>{q.text}</div>
+                <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: '2px' }}>QUESTION {idx + 1}</div>
+                <div style={{ fontSize: '17px', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.4 }}>{q.text}</div>
               </div>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {q.options.map((opt, oIdx) => (
-                <button key={oIdx} className="opt-btn" onClick={() => handleSelect(q.id, oIdx)} data-selected={answers[q.id] === oIdx} style={{ padding: '12px 16px' }}>
-                  <div className="opt-indicator">{answers[q.id] === oIdx && <FaCheck size={10} color="white" />}</div>
-                  <span style={{ fontSize: '14px' }}>{opt}</span>
+                <button key={oIdx} className="opt-btn" onClick={() => handleSelect(q.id, oIdx)} data-selected={answers[q.id] === oIdx}>
+                  <div className="opt-indicator">{answers[q.id] === oIdx && <FaCheck size={12} color="white" />}</div>
+                  <span style={{ fontSize: '15px' }}>{opt}</span>
                 </button>
               ))}
             </div>

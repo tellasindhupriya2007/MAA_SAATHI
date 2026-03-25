@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { FaArrowLeft, FaFilePdf, FaDownload, FaSearch, FaChevronRight } from 'react-icons/fa';
 import DoctorLayout from '../../layouts/DoctorLayout';
 import { useLanguage } from '../../context/LanguageContext';
+import { useAuth } from '../../hooks/useAuth';
+import { useReports } from '../../hooks/useReports';
 
 const MOCK_REPORTS = [
   { id: 'r1', name: 'Anjali Devi',    asha: 'Lakshmi', date: 'Today, 10:30 AM',     urgency: 'CRITICAL', status: 'New'    },
@@ -17,8 +19,23 @@ const FILTERS = ["All", "Critical", "Moderate", "Stable", "This Month"];
 const ReportsListScreen = () => {
   const navigate = useNavigate();
   const { language } = useLanguage();
+  const { profile } = useAuth();
   const [activeFilter, setActiveFilter] = useState("All");
   const [search, setSearch] = useState("");
+
+  const { reports: firestoreReports, loading } = useReports('doctor', profile?.email || profile?.uid);
+
+  const combinedReports = React.useMemo(() => {
+    const fireReports = (firestoreReports || []).map(r => ({
+      ...r,
+      name: r.patientName,
+      asha: r.ashaName || 'N/A',
+      date: r.createdAt?.seconds ? new Date(r.createdAt.seconds * 1000).toLocaleString() : 'Just now',
+      urgency: r.urgency || r.aiStatus || 'STABLE',
+      status: 'New'
+    }));
+    return fireReports.length === 0 ? MOCK_REPORTS : [...fireReports, ...MOCK_REPORTS];
+  }, [firestoreReports]);
 
   const t = {
     en: {
@@ -36,14 +53,15 @@ const ReportsListScreen = () => {
   };
   const text = t[language] || t.en;
 
-  const filtered = MOCK_REPORTS.filter(r => {
-    const matchesFilter = 
-      activeFilter === "All" ? true :
-      activeFilter === "Critical" ? r.urgency === "CRITICAL" :
-      activeFilter === "Moderate" ? r.urgency === "MODERATE" :
-      activeFilter === "Stable" ? r.urgency === "STABLE" : true;
+  const filtered = combinedReports.filter(r => {
+    const reportName = String(r.name || '').toLowerCase();
+    const reportUrgency = String(r.urgency || 'STABLE').toUpperCase();
     
-    const matchesSearch = r.name.toLowerCase().includes(search.toLowerCase());
+    const matchesFilter =
+      activeFilter === "All" ? true :
+      activeFilter.toUpperCase() === reportUrgency;
+
+    const matchesSearch = reportName.includes(search.toLowerCase());
     return matchesFilter && matchesSearch;
   });
 

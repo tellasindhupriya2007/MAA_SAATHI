@@ -3,6 +3,10 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { FaCheckCircle, FaExclamationTriangle, FaExclamationCircle, FaVolumeUp, FaCheck, FaFilePdf, FaArrowLeft, FaRobot, FaStop, FaUserMd, FaDownload, FaPaperPlane } from 'react-icons/fa';
 import { jsPDF } from 'jspdf';
 import { useLanguage } from '../../context/LanguageContext';
+import { db } from '../../config/firebase';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { COLLECTIONS, validateFirestoreDocument } from '../../config/firebaseSchema';
+import { useAuth } from '../../hooks/useAuth';
 
 export default function AIReportResultScreen() {
   const location = useLocation();
@@ -16,7 +20,7 @@ export default function AIReportResultScreen() {
   const [reportSent, setReportSent] = useState(false);
   const [toast, setToast] = useState('');
 
-  const { questions = [], answers = {} } = location.state || {};
+  const { questions = [], answers = {}, isGuest = false } = location.state || {};
   const patient = location.state?.patient || { name: 'Suhana Khatun', age: 24, village: 'Ramgarh', house: '42' };
 
   useEffect(() => {
@@ -312,10 +316,50 @@ export default function AIReportResultScreen() {
     doc.save(`${patient.name.replace(/\\s+/g, '_')}_HealthReport.pdf`);
   };
 
-  const handleSendToDoctor = () => {
-    setReportSent(true);
-    setToast('Report sent to Dr. Sharma');
-    setTimeout(() => setToast(''), 3000);
+  const { profile } = useAuth();
+
+  const handleSendToDoctor = async () => {
+    let rawTarget = patient?.doctorEmail || profile?.linkedDoctorEmail;
+    
+    if (!rawTarget) {
+      const email = prompt("Enter doctor's email to send this report:");
+      if (!email || !email.includes('@')) {
+        alert("Please provide a valid doctor email.");
+        return;
+      }
+      rawTarget = email;
+    }
+    const targetEmail = rawTarget.toLowerCase().trim();
+
+    try {
+      const reportData = {
+        patientId: patient.id || 'unknown',
+        patientName: patient.name,
+        patientType: patient.type || 'pregnant',
+        doctorEmail: targetEmail,
+        type: 'AI Health Assessment',
+        urgency: result,
+        aiStatus: result,
+        aiParagraphEnglish: aiText,
+        ashaName: profile?.name || 'ASHA Worker',
+        phcLocation: patient.village || profile?.phc || 'PHC Ramgarh',
+        createdAt: serverTimestamp()
+      };
+
+      // Client-side schema validation
+      if (typeof validateFirestoreDocument === 'function') {
+        validateFirestoreDocument('reports', reportData);
+      }
+
+      await addDoc(collection(db, COLLECTIONS.reports), reportData);
+
+      setReportSent(true);
+      setToast(`Report submitted successfully to ${targetEmail}`);
+    } catch (err) {
+      console.error("[REPORTS] submission error:", err);
+      const msg = err.message || "Failed to reach doctor.";
+      alert(`Submission Failed: ${msg}\n\nThis usually happens if the database is busy or rules need updating. Please try again or check your email settings.`);
+    }
   };
 
   if (loading) {
@@ -466,12 +510,25 @@ export default function AIReportResultScreen() {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <button onClick={handleSendToDoctor} style={{ height: '52px', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', font: '15px "DM Sans", sans-serif', fontWeight: 600, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer' }}>
-               <FaPaperPlane size={16} /> Send to Doctor
-            </button>
-            <button onClick={generatePDF} style={{ height: '52px', background: 'transparent', color: 'var(--accent)', border: '1.5px solid var(--accent)', borderRadius: 'var(--radius-md)', font: '15px "DM Sans", sans-serif', fontWeight: 600, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer' }}>
-               <FaDownload size={16} /> Download PDF
-            </button>
+            {isGuest ? (
+              <>
+                <button onClick={() => navigate('/login')} style={{ height: '52px', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', font: '15px "DM Sans", sans-serif', fontWeight: 600, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer' }}>
+                   <FaUserMd size={16} /> Create Account to Save
+                </button>
+                <button onClick={generatePDF} style={{ height: '52px', background: 'transparent', color: 'var(--accent)', border: '1.5px solid var(--accent)', borderRadius: 'var(--radius-md)', font: '15px "DM Sans", sans-serif', fontWeight: 600, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer' }}>
+                   <FaDownload size={16} /> Download Copy
+                </button>
+              </>
+            ) : (
+              <>
+                <button onClick={handleSendToDoctor} style={{ height: '52px', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', font: '15px "DM Sans", sans-serif', fontWeight: 600, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer' }}>
+                   <FaPaperPlane size={16} /> Send to Doctor
+                </button>
+                <button onClick={generatePDF} style={{ height: '52px', background: 'transparent', color: 'var(--accent)', border: '1.5px solid var(--accent)', borderRadius: 'var(--radius-md)', font: '15px "DM Sans", sans-serif', fontWeight: 600, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer' }}>
+                   <FaDownload size={16} /> Download PDF
+                </button>
+              </>
+            )}
           </div>
 
           <div onClick={() => navigate('/asha/dashboard')} style={{ textAlign: 'center', font: '14px "DM Sans", sans-serif', color: 'var(--text-tertiary)', marginTop: '8px', textDecoration: 'underline', cursor: 'pointer' }}>

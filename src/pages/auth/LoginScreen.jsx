@@ -96,7 +96,6 @@ const LoginScreen = () => {
           navigate('/role-setup', { replace: true });
           return;
         }
-
         if (role === 'patient' && !initialType) {
           navigate('/patient-type-select', { replace: true, state: { mode: 'signup' } });
           return;

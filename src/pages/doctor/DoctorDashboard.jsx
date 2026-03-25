@@ -10,6 +10,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../context/ThemeContext';
 import { useAlerts } from '../../hooks/useAlerts';
+import { useReports } from '../../hooks/useReports';
 import { generateProfessionalReport } from '../../utils/generatePdfReport';
 import { AppContext } from '../../context/AppContext';
 
@@ -104,6 +105,7 @@ const DoctorDashboard = () => {
   const [isGenerating, setIsGenerating] = useState(false);
 
   const { alerts: firestoreAlerts } = useAlerts('doctor');
+  const { reports: firestoreReports, loading: reportsLoading } = useReports('doctor', profile?.email || profile?.uid);
 
   const combinedAlerts = useMemo(() => {
     const fireAlerts = (firestoreAlerts || []).map(a => ({
@@ -145,23 +147,35 @@ const DoctorDashboard = () => {
     }));
   }, [patients]);
 
+  const firestoreReportCards = useMemo(() => {
+    const fireReports = (firestoreReports || []).map(r => ({
+      ...r,
+      name: r.patientName || r.name || 'Unknown',
+      patientType: r.patientType || 'wellness',
+      date: r.createdAt?.seconds ? new Date(r.createdAt.seconds * 1000).toLocaleString() : 'Just now',
+      urgency: r.urgency || r.aiStatus || 'STABLE',
+      phc: r.phcLocation || 'PHC Ramgarh'
+    }));
+    return fireReports;
+  }, [firestoreReports]);
+
   const handleViewReport = (rep) => {
-    navigate(`/report/${rep.id}`);
+    navigate(`/doctor/report/${rep.id}`, { state: { report: rep } });
   };
 
   const filteredAlerts = combinedAlerts.filter(a => activeFilter === 'All' || a.patientType === activeFilter);
   const allReports = useMemo(() => {
     const reportById = new Map();
-    [...contextReports, ...PDF_REPORTS].forEach((report) => {
+    [...firestoreReportCards, ...contextReports, ...PDF_REPORTS].forEach((report) => {
       const key = String(report.name || report.id || '').toLowerCase();
       if (!reportById.has(key)) {
         reportById.set(key, report);
       }
     });
     return Array.from(reportById.values());
-  }, [contextReports]);
+  }, [firestoreReportCards, contextReports]);
 
-  const filteredReports = allReports.filter(r => activeFilter === 'All' || (activeFilter === 'mother' && r.patientType === 'pregnant') || r.patientType === activeFilter);
+  const filteredReports = allReports.filter(r => activeFilter === 'All' || (activeFilter === 'mother' && (r.patientType === 'pregnant' || r.patientType === 'mother')) || r.patientType === activeFilter);
 
   const t = {
     en: {
