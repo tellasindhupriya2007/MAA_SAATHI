@@ -208,6 +208,26 @@
         ]
       },
       "allowAdditionalFields": true
+    },
+    "reports": {
+      "path": "reports/{reportId}",
+      "required": [
+        "patientId",
+        "patientName"
+      ],
+      "fields": {
+        "patientId": "string",
+        "patientName": "string",
+        "patientType": "string",
+        "doctorId": "string",
+        "doctorEmail": "string",
+        "type": "string",
+        "urgency": "string",
+        "aiStatus": "string",
+        "aiParagraphEnglish": "string",
+        "createdAt": "timestamp"
+      },
+      "allowAdditionalFields": true
     }
   }
 }

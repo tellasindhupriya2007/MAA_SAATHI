@@ -10,6 +10,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../context/ThemeContext';
 import { useAlerts } from '../../hooks/useAlerts';
+import { useReports } from '../../hooks/useReports';
 import { generateProfessionalReport } from '../../utils/generatePdfReport';
 
 const themeColors = {
@@ -67,6 +68,7 @@ const DoctorDashboard = () => {
   const [isGenerating, setIsGenerating] = useState(false);
 
   const { alerts: firestoreAlerts } = useAlerts('doctor');
+  const { reports: firestoreReports, loading: reportsLoading } = useReports('doctor', profile?.email || profile?.uid);
 
   const combinedAlerts = useMemo(() => {
     const fireAlerts = (firestoreAlerts || []).map(a => ({
@@ -92,12 +94,23 @@ const DoctorDashboard = () => {
     return fireAlerts.length === 0 ? MOCK_ALERTS : [...fireAlerts, ...MOCK_ALERTS];
   }, [firestoreAlerts]);
 
+  const combinedReports = useMemo(() => {
+    const fireReports = (firestoreReports || []).map(r => ({
+      ...r,
+      name: r.patientName,
+      date: r.createdAt?.seconds ? new Date(r.createdAt.seconds * 1000).toLocaleString() : 'Just now',
+      urgency: r.urgency || r.aiStatus || 'STABLE',
+      phc: r.phcLocation || 'PHC Ramgarh'
+    }));
+    return fireReports.length === 0 ? PDF_REPORTS : [...fireReports, ...PDF_REPORTS];
+  }, [firestoreReports]);
+
   const handleViewReport = (rep) => {
-    navigate(`/report/${rep.id}`);
+    navigate(`/doctor/report/${rep.id}`, { state: { report: rep } });
   };
 
   const filteredAlerts = combinedAlerts.filter(a => activeFilter === 'All' || a.patientType === activeFilter);
-  const filteredReports = PDF_REPORTS.filter(r => activeFilter === 'All' || (activeFilter === 'mother' && r.patientType === 'pregnant') || r.patientType === activeFilter);
+  const filteredReports = combinedReports.filter(r => activeFilter === 'All' || (activeFilter === 'mother' && (r.patientType === 'pregnant' || r.patientType === 'mother')) || r.patientType === activeFilter);
 
   const t = {
     en: {

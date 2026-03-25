@@ -18,35 +18,24 @@ const ReportViewerScreen = () => {
     date: 'Yesterday, 2:15 PM',
     urgency: 'MODERATE',
     status: 'Viewed',
-    medicalHistory: {
-       "Is this your first pregnancy?": "Yes",
-       "Any known allergies?": "None",
-       "Recent symptoms": "Mild nausea"
-    }
+    medicalHistory: null
   };
 
   const dummyData = {
-    age: '22',
-    village: 'Sila village',
-    asha: 'Kamala',
-    responses: [
-      { q: "Any swelling in feet?", a: "Yes, mild swelling", danger: true },
-      { q: "Frequent headaches?", a: "None", danger: false },
-      { q: "Fetal movement?", a: "Strong/Normal", danger: false },
-      { q: "Vision problems?", a: "None", danger: false },
-      { q: "Back pain?", a: "Moderate", danger: false }
-    ],
+    age: report.patientAge || '22',
+    village: report.phcLocation || 'Sila village',
+    asha: report.ashaName || 'Kamala',
+    responses: [], // Handled by medicalHistory loop
     aiAnalysis: {
-      summary: "Patient shows mild peripheral edema (swelling) which can be a precursor to pre-eclampsia. All other vitals and symptoms are currently within normal range. Fetal movement is reassuring.",
-      dangerFlags: ["Mild swelling in feet", "Slightly elevated BP from last visit"],
+      summary: report.aiParagraphEnglish || "Initial AI assessment for the patient based on shared health parameters. Vitals trends are being monitored for anomalies.",
+      dangerFlags: report.aiFlags || (report.urgency === 'CRITICAL' ? ["Abnormal Vital Signs Detected", "High Risk Score"] : []),
       recommendations: [
-        "Monitor blood pressure daily for next 3 days",
-        "Advise ASHA to check for protein in urine",
-        "Advise left lateral sleeping position",
-        "Instruct patient to call SOS if headache occurs"
+        "Monitor blood pressure daily",
+        "Maintain regular diet and hydration",
+        "Consult PHC if symptoms persist"
       ]
     },
-    voiceNoteText: "Patient mentions back pain is worse at night when sleeping. Swelling started 2 days ago after long walk."
+    voiceNoteText: "No voice note attached."
   };
 
   const t = {
@@ -180,7 +169,7 @@ const ReportViewerScreen = () => {
                   <span style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', marginTop: '4px' }}>{a}</span>
                 </div>
               ))
-            ) : (
+            ) : dummyData.responses.length > 0 ? (
               dummyData.responses.map((res, i) => (
                 <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border-subtle)' }}>
                   <span style={{ fontSize: '14px', color: 'var(--text-secondary)', flex: 1 }}>{res.q}</span>
@@ -190,6 +179,10 @@ const ReportViewerScreen = () => {
                   }}>{res.a}</span>
                 </div>
               ))
+            ) : (
+              <div style={{ fontSize: '14px', color: 'var(--text-tertiary)', textAlign: 'center', padding: '12px' }}>
+                No detailed survey responses shared in this report.
+              </div>
             )}
           </div>
         </div>

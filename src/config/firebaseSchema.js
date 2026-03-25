@@ -46,7 +46,8 @@ export const COLLECTIONS = Object.freeze({
   patients: getCollectionName('patients'),
   surveys: getCollectionName('surveys'),
   alerts: getCollectionName('alerts'),
-  vitals: getCollectionName('vitals')
+  vitals: getCollectionName('vitals'),
+  reports: getCollectionName('reports')
 });
 
 export const validateFirestoreDocument = (schemaKey, data, { partial = false } = {}) => {

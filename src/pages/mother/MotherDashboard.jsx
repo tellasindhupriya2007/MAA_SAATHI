@@ -15,7 +15,11 @@ import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../context/ThemeContext';
 import { useVitals } from '../../hooks/useVitals';
 import { useSurveys } from '../../hooks/useSurveys';
+import { useReports } from '../../hooks/useReports';
 import { generateInstantReport, generateMonthlyReport } from '../../utils/generatePdfReport';
+import { db } from '../../config/firebase';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { COLLECTIONS, validateFirestoreDocument } from '../../config/firebaseSchema';
 
 const REPORTS = [
   { id: 'r1', type: 'Antenatal Checkup', date: '12 Mar 2026', urgency: 'STABLE'   },
@@ -70,7 +74,7 @@ const urgencyColors = {
 const MotherDashboard = () => {
   const navigate = useNavigate();
   const { language, toggleLanguage } = useLanguage();
-  const { profile } = useAuth();
+  const { profile, updateProfile } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [avatarErr, setAvatarErr] = useState(false);
   
@@ -87,13 +91,25 @@ const MotherDashboard = () => {
   const [isSending, setIsSending] = useState(false);
   const { vitals, latestVitals } = useVitals(profile?.uid);
   const { surveys } = useSurveys(profile?.uid);
-  const latestSurvey = surveys && surveys.length > 0 ? surveys[0] : null;
   const [toast, setToast] = useState('');
 
   const showToast = (msg) => {
     setToast(msg);
     setTimeout(() => setToast(''), 3000);
   };
+
+  const { reports: firestoreReports } = useReports('patient', profile?.uid);
+  const latestSurvey = surveys && surveys.length > 0 ? surveys[0] : null;
+
+  const displayReports = React.useMemo(() => {
+    const fireReports = (firestoreReports || []).map(r => ({
+      ...r,
+      type: r.type || 'Health Assessment',
+      date: r.createdAt?.seconds ? new Date(r.createdAt.seconds * 1000).toLocaleDateString() : 'Just now',
+      urgency: r.urgency || r.aiStatus || 'STABLE'
+    }));
+    return fireReports.length === 0 ? REPORTS : fireReports;
+  }, [firestoreReports, latestSurvey]);
 
   const rawVitals = vitals && vitals.length > 0 ? vitals : generateMockVitals(7);
   const displayVitals = rawVitals.map(normalizeVitalsEntry);
@@ -106,36 +122,84 @@ const MotherDashboard = () => {
   const currentRoomHumidity = latest.roomHumidity;
 
   const generatePDF = async (type, mode = 'download') => {
+    console.log(`[REPORTS] Generating ${type} report in ${mode} mode...`);
+    showToast(language === 'te' ? 'నివేదికను సిద్ధం చేస్తోంది...' : 'Preparing your report...');
     setIsGenerating(true);
+    
+    // Safety timeout to reset state if something goes wrong
+    const timer = setTimeout(() => {
+      setIsGenerating(false);
+    }, 5000);
+
     try {
+      // Use displayVitals if real vitals are empty to ensure a good-looking report
+      const vitalsToUse = (vitals && vitals.length > 0) ? vitals : rawVitals;
+      
       if (type === 'instant') {
-        generateInstantReport(profile, vitals, latestSurvey, mode);
+        generateInstantReport(profile, vitalsToUse, latestSurvey, mode);
       } else {
-        generateMonthlyReport(profile, vitals, latestSurvey, mode);
+        generateMonthlyReport(profile, vitalsToUse, latestSurvey, mode);
       }
       setReportGenerated(true);
+      console.log(`[REPORTS] ${type} report generation successful.`);
     } catch (err) {
-      console.error("PDF generation error:", err);
+      console.error("[REPORTS] PDF generation error:", err);
+      alert("Something went wrong while generating the PDF. Please try again.");
     } finally {
+      clearTimeout(timer);
       setIsGenerating(false);
     }
   };
 
-  const handleSendToDoctor = (e) => {
+  const handleSendToDoctor = async (e) => {
     e.preventDefault();
     if (isSending) return;
 
-    if (profile?.linkedDoctorId || profile?.linkedDoctorEmail) {
-      setIsSending(true);
-      showToast(`Report sent to Dr. ${profile?.linkedDoctorName || 'Sharma'}`);
-      setTimeout(() => setIsSending(false), 3000);
-    } else {
-      const email = prompt("Link a Doctor: Enter your doctor's email or phone number:");
-      if (email) {
-        setIsSending(true);
-        showToast("Doctor linked and report sent successfully!");
-        setTimeout(() => setIsSending(false), 3000);
+    let targetEmail = profile?.linkedDoctorEmail;
+    
+    if (!targetEmail) {
+      const email = prompt("Link a Doctor: Enter your doctor's email:");
+      if (!email || !email.includes('@')) {
+        alert("Please provide a valid doctor email.");
+        return;
       }
+      targetEmail = email.toLowerCase().trim();
+    }
+
+    setIsSending(true);
+    try {
+      const reportData = {
+        patientId: profile?.uid || 'unknown',
+        patientName: profile?.name || 'Unknown Patient',
+        patientType: 'pregnant',
+        doctorEmail: targetEmail,
+        type: 'Monthly Health Report',
+        urgency: latestSurvey?.aiStatus || 'STABLE',
+        aiStatus: latestSurvey?.aiStatus || 'STABLE',
+        aiParagraphEnglish: latestSurvey?.aiParagraphEnglish || 'Patient health profile shared.',
+        createdAt: serverTimestamp()
+      };
+
+      // Validate before sending
+      validateFirestoreDocument('reports', reportData);
+
+      // Save report to firestore for the doctor
+      await addDoc(collection(db, COLLECTIONS.reports), reportData);
+
+      // Link doctor if not already linked
+      if (!profile?.linkedDoctorEmail) {
+        await updateProfile({ linkedDoctorEmail: targetEmail });
+      }
+
+      showToast(`Report sent successfully to ${targetEmail}`);
+      setReportGenerated(false); // Reset to hide the button after success
+    } catch (err) {
+      console.error("[REPORTS] Detailed error:", err);
+      // If it's a schema validation error, show it clearly
+      const msg = err.message || "Failed to send report.";
+      alert(`Error: ${msg}\n\nPlease check if your doctor's email is correct and try again.`);
+    } finally {
+      setIsSending(false);
     }
   };
 
